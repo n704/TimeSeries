@@ -29,16 +29,18 @@ estimates, not guaranteed outcomes or investment advice.
 
 1. Accept a company name or ticker and resolve it to an unambiguous listed
    security.
-2. Show historical adjusted closing prices and basic trend context in
+2. Provide a default NIFTY 50 research starting point with a small set of
+   featured constituent shortcuts.
+3. Show historical adjusted closing prices and basic trend context in
    interactive charts.
-3. Forecast the next 5, 20, or 60 trading days with TimesFM.
-4. Visualize the median forecast and an uncertainty interval alongside history.
-5. Summarize the predicted trend in plain language without giving buy, sell, or
+4. Forecast the next 5, 20, or 60 trading days with TimesFM.
+5. Visualize the median forecast and an uncertainty interval alongside history.
+6. Summarize the predicted trend in plain language without giving buy, sell, or
    hold recommendations.
-6. Provide a fast, accessible, mobile-friendly user experience.
-7. Keep market-data and model integrations replaceable so licensing, cost, or
+7. Provide a fast, accessible, mobile-friendly user experience.
+8. Keep market-data and model integrations replaceable so licensing, cost, or
    infrastructure changes do not require frontend changes.
-8. Run the complete development application on macOS with TimesFM installed and
+9. Run the complete development application on macOS with TimesFM installed and
    its checkpoint available locally.
 
 ## 3. Non-goals for the MVP
@@ -64,18 +66,26 @@ short- or medium-term trend and understands that model output is uncertain.
 
 ### 4.2 Primary journey
 
-1. The user opens the application and sees a focused search experience.
-2. The user types a company name or ticker, such as `Reliance` or
+1. The user opens the application on the **NIFTY 50 research** tab.
+2. Reliance is selected by default, its adjusted-close history loads, and the
+   20-session forecast starts automatically.
+3. The user may select another featured NIFTY 50 constituent and receives the
+   same automatic forecast workflow.
+4. The UI shows a neutral screening label derived from the final forecast
+   quantiles. It helps choose what to research next and is not a buy, sell, or
+   hold recommendation.
+5. The user may open **Stock explorer** and type a company name or ticker, such as
+   `Reliance` or
    `RELIANCE.NS`.
-3. After at least two characters, the UI displays matching securities with
+6. After at least two characters, the UI displays matching securities with
    company name, ticker, exchange, region, and currency.
-4. The user selects exactly one result.
-5. The application loads the latest historical data and company summary.
-6. The user selects a forecast horizon: 5, 20, or 60 trading days.
-7. The user selects **Generate forecast**.
-8. The UI displays historical prices, the forecast line, an uncertainty band,
+7. The user selects exactly one result.
+8. The application loads the latest historical data and company summary.
+9. The user selects a forecast horizon: 5, 20, or 60 trading days.
+10. The user selects **Generate forecast**.
+11. The UI displays historical prices, the forecast line, an uncertainty band,
    key values, a trend summary, data/model metadata, and a disclaimer.
-9. The user can change the horizon or choose a different security.
+12. The user can change the horizon or choose a different security.
 
 Submitting free text that has not been resolved to a security must not silently
 select a result. An exact ticker match may be selected automatically only when
@@ -83,7 +93,21 @@ the provider returns one unique active listing.
 
 ## 5. Functional requirements
 
-### 5.1 Security search and selection
+### 5.1 NIFTY 50 research entry
+
+- `FR-RESEARCH-01`: The NIFTY 50 research tab is selected on initial load.
+- `FR-RESEARCH-02`: Reliance Industries is the default featured constituent and
+  automatically requests the default 20-session forecast after history loads.
+- `FR-RESEARCH-03`: Selecting another featured constituent aborts stale history,
+  forecast, and back-check requests before loading and forecasting the new
+  security.
+- `FR-RESEARCH-04`: The research signal describes whether the final p10-p90
+  range is above, below, or crosses the latest adjusted close. It must state
+  which inputs it omits and that it is not a buy recommendation.
+- `FR-RESEARCH-05`: Featured shortcuts are not presented as a complete or
+  real-time index-membership feed.
+
+### 5.2 Security search and selection
 
 - `FR-SEARCH-01`: Search accepts company names and ticker symbols,
   case-insensitively.
@@ -97,7 +121,7 @@ the provider returns one unique active listing.
 - `FR-SEARCH-06`: Empty input, no matches, ambiguous matches, unsupported
   instruments, and provider failures each have a distinct UI state.
 
-### 5.2 Historical market data
+### 5.3 Historical market data
 
 - `FR-DATA-01`: Use daily adjusted close as the forecast target. Adjustment
   must account for stock splits and dividends where supported by the provider.
@@ -113,7 +137,7 @@ the provider returns one unique active listing.
 - `FR-DATA-07`: Display the provider name, price currency, exchange timezone,
   last market date, and data retrieval time.
 
-### 5.3 Forecast generation
+### 5.4 Forecast generation
 
 - `FR-FORECAST-01`: Supported horizons are exactly 5, 20, and 60 future trading
   sessions in the MVP.
@@ -135,7 +159,7 @@ the provider returns one unique active listing.
   explicit error. The API must not substitute a heuristic forecast and present
   it as TimesFM output.
 
-### 5.4 Historical back-check
+### 5.5 Historical back-check
 
 - `FR-BACKTEST-01`: The user can request a back-check for the latest seven valid
   trading sessions of the selected security.
@@ -152,7 +176,7 @@ the provider returns one unique active listing.
 - `FR-BACKTEST-06`: Clearly identify the result as one historical holdout. Do
   not present it as a guarantee of future performance or financial advice.
 
-### 5.5 Trend analysis
+### 5.6 Trend analysis
 
 The backend calculates deterministic explanatory metrics from historical and
 forecast values:
@@ -176,7 +200,7 @@ The summary must use neutral language, for example:
 The summary must not state that the stock "will" reach a price and must not use
 recommendation language.
 
-### 5.6 Model and data disclosure
+### 5.7 Model and data disclosure
 
 Every forecast view must show:
 
@@ -188,7 +212,7 @@ Every forecast view must show:
 - A warning when the latest market observation is more than three expected
   trading sessions old.
 
-### 5.7 Chart visualizations
+### 5.8 Chart visualizations
 
 Charts are a required part of the MVP, not an optional enhancement:
 
@@ -225,22 +249,26 @@ The MVP is a single-page application with these regions:
 1. **Header**
    - Product name.
    - Short subtitle: "Explore time-series forecasts for listed stocks."
-2. **Search panel**
+2. **Workflow tabs**
+   - Default NIFTY 50 research entry with featured constituent shortcuts.
+   - Stock explorer entry for provider-backed security search.
+3. **Search panel**
    - Accessible combobox for security search.
    - Recent examples as non-binding suggestions on the empty state.
-3. **Security summary**
+4. **Security summary**
    - Company name, ticker, exchange, currency, latest adjusted close, and last
      market date.
-4. **Forecast controls**
+5. **Forecast controls**
    - Segmented control for 5 days, 20 days, or 60 days.
    - Primary **Generate forecast** button.
-5. **Results**
+6. **Results**
    - Trend summary.
+   - Neutral model-screening label on the NIFTY 50 research tab.
    - Metric cards: latest close, forecast end, forecast change, interval width.
    - Interactive historical price chart, enhanced with forecast and uncertainty
      visualizations after prediction.
    - Expandable methodology and metadata.
-6. **Footer**
+7. **Footer**
    - Data attribution, model attribution, and financial disclaimer.
 
 ### 6.3 Charts
