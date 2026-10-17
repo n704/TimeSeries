@@ -97,9 +97,21 @@ function formatPercent(value: number): string {
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+function isObservationCount(value: unknown): value is number {
+  return typeof value === "number" && Number.isInteger(value) && value >= 0;
+}
+
 function readableError(error: unknown): string {
   if (error instanceof ApiError) {
-    return `${error.message} (Request ${error.requestId})`;
+    const available = error.details?.available_observations;
+    const required = error.details?.required_observations;
+    const historyDetails =
+      error.code === "INSUFFICIENT_HISTORY" &&
+      isObservationCount(available) &&
+      isObservationCount(required)
+        ? ` Available history: ${available} trading days. Minimum required for prediction: ${required} trading days.`
+        : "";
+    return `${error.message}${historyDetails} (Request ${error.requestId})`;
   }
   if (error instanceof Error) return error.message;
   return "An unexpected error occurred.";
