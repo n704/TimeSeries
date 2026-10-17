@@ -47,20 +47,24 @@ market-data credentials, model credentials, or checkpoint paths.
 
 ## User flow
 
-1. Enter at least two characters of an Indian company name or NSE/BSE ticker.
-2. Search starts after a 300 ms debounce.
-3. Select one supported security.
-4. Load and display adjusted-close history.
-5. Optionally change the display range or moving-average overlays.
-6. Choose 5, 20, or 60 trading sessions.
-7. Generate and display the forecast, metrics, metadata, and disclaimer.
-8. Optionally back-check the model against the latest seven known sessions.
+1. Open the default **NIFTY 50 research** tab.
+2. Reliance is selected and its 20-session forecast starts automatically.
+3. Optionally choose another featured NIFTY 50 constituent shortcut.
+4. Review the neutral model-screening signal, price range, uncertainty, metadata,
+   and disclaimer. The signal is not a buy recommendation.
+5. Optionally change the display range, moving-average overlays, or forecast
+   horizon.
+6. Optionally back-check the model against the latest seven known sessions.
+7. Open **Stock explorer** to search any supported NSE/BSE common stock; search
+   starts after a 300 ms debounce.
 
 ## Request state rules
 
 - Search, history, and forecast requests use `AbortController`.
 - Selecting a new stock clears previous history and forecast data.
 - A stale response must never overwrite the currently selected stock.
+- Featured research presets automatically forecast only the newly selected
+  security.
 - Range changes affect historical display but not the forecast horizon.
 - Forecast success moves keyboard focus to the result heading.
 - Back-check success moves keyboard focus to its result heading.

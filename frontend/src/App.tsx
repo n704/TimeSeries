@@ -19,6 +19,71 @@ import type {
 
 const ranges: HistoryRange[] = ["6m", "1y", "2y", "5y"];
 const horizons: ForecastHorizon[] = [5, 20, 60];
+const nifty50Presets: Security[] = [
+  {
+    symbol: "RELIANCE.NS",
+    name: "Reliance Industries Limited",
+    exchange: "NSE",
+    region: "India",
+    currency: "INR",
+    instrument_type: "common_stock",
+    timezone: "Asia/Kolkata",
+  },
+  {
+    symbol: "HDFCBANK.NS",
+    name: "HDFC Bank Limited",
+    exchange: "NSE",
+    region: "India",
+    currency: "INR",
+    instrument_type: "common_stock",
+    timezone: "Asia/Kolkata",
+  },
+  {
+    symbol: "ICICIBANK.NS",
+    name: "ICICI Bank Limited",
+    exchange: "NSE",
+    region: "India",
+    currency: "INR",
+    instrument_type: "common_stock",
+    timezone: "Asia/Kolkata",
+  },
+  {
+    symbol: "INFY.NS",
+    name: "Infosys Limited",
+    exchange: "NSE",
+    region: "India",
+    currency: "INR",
+    instrument_type: "common_stock",
+    timezone: "Asia/Kolkata",
+  },
+  {
+    symbol: "TCS.NS",
+    name: "Tata Consultancy Services Limited",
+    exchange: "NSE",
+    region: "India",
+    currency: "INR",
+    instrument_type: "common_stock",
+    timezone: "Asia/Kolkata",
+  },
+  {
+    symbol: "BHARTIARTL.NS",
+    name: "Bharti Airtel Limited",
+    exchange: "NSE",
+    region: "India",
+    currency: "INR",
+    instrument_type: "common_stock",
+    timezone: "Asia/Kolkata",
+  },
+];
+const defaultNiftySecurity = nifty50Presets[0];
+
+type AppTab = "research" | "explore";
+
+interface ResearchSignal {
+  label: string;
+  tone: "positive" | "mixed" | "negative";
+  explanation: string;
+}
 
 function formatPrice(value: number, currency: string): string {
   return new Intl.NumberFormat(undefined, {
@@ -52,6 +117,48 @@ function readableError(error: unknown): string {
   return "An unexpected error occurred.";
 }
 
+function getResearchSignal(forecast: ForecastResponse): ResearchSignal {
+  const finalPoint = forecast.forecast.at(-1);
+  const latest = forecast.analysis.latest_close;
+  if (!finalPoint) {
+    return {
+      label: "Insufficient forecast data",
+      tone: "mixed",
+      explanation: "TimesFM did not return an end-of-horizon range to screen.",
+    };
+  }
+  if (finalPoint.p10 > latest) {
+    return {
+      label: "Range above latest close",
+      tone: "positive",
+      explanation:
+        "The full final p10-p90 range is above the latest adjusted close, while uncertainty still applies.",
+    };
+  }
+  if (finalPoint.p50 > latest) {
+    return {
+      label: "Positive median, overlapping downside",
+      tone: "mixed",
+      explanation:
+        "The median ends above the latest close, but the uncertainty range still includes a lower outcome.",
+    };
+  }
+  if (finalPoint.p90 < latest) {
+    return {
+      label: "Range below latest close",
+      tone: "negative",
+      explanation:
+        "The full final p10-p90 range is below the latest adjusted close.",
+    };
+  }
+  return {
+    label: "Mixed forecast range",
+    tone: "mixed",
+    explanation:
+      "The final uncertainty range crosses the latest close and the median does not show positive modeled change.",
+  };
+}
+
 export default function App() {
   const inputId = useId();
   const resultsId = useId();
@@ -59,10 +166,14 @@ export default function App() {
   const backtestHeadingRef = useRef<HTMLHeadingElement>(null);
   const forecastRequestRef = useRef<AbortController | null>(null);
   const backtestRequestRef = useRef<AbortController | null>(null);
+  const [activeTab, setActiveTab] = useState<AppTab>("research");
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Security[]>([]);
   const [searching, setSearching] = useState(false);
-  const [selected, setSelected] = useState<Security | null>(null);
+  const [selected, setSelected] = useState<Security | null>(defaultNiftySecurity);
+  const [autoForecastSymbol, setAutoForecastSymbol] = useState<string | null>(
+    defaultNiftySecurity.symbol,
+  );
   const [range, setRange] = useState<HistoryRange>("1y");
   const [horizon, setHorizon] = useState<ForecastHorizon>(20);
   const [history, setHistory] = useState<HistoryResponse | null>(null);
@@ -129,20 +240,21 @@ export default function App() {
     [selected?.symbol],
   );
 
-  function chooseSecurity(security: Security) {
+  function chooseSecurity(security: Security, autoForecast = false) {
     forecastRequestRef.current?.abort();
     forecastRequestRef.current = null;
     backtestRequestRef.current?.abort();
     backtestRequestRef.current = null;
     setForecasting(false);
     setBacktesting(false);
-    setSelected(security);
+    setSelected({ ...security });
     setQuery(security.name);
     setSearchResults([]);
     setHistory(null);
     setForecast(null);
     setBacktest(null);
     setError(null);
+    setAutoForecastSymbol(autoForecast ? security.symbol : null);
   }
 
   async function generateForecast() {
@@ -191,6 +303,19 @@ export default function App() {
     }
   }
 
+  useEffect(() => {
+    if (
+      !autoForecastSymbol ||
+      !history ||
+      history.security.symbol !== autoForecastSymbol ||
+      selected?.symbol !== autoForecastSymbol
+    ) {
+      return;
+    }
+    setAutoForecastSymbol(null);
+    void generateForecast();
+  }, [autoForecastSymbol, history, selected?.symbol]);
+
   const activeHistory = history?.prices ?? forecast?.history ?? [];
   const currency =
     forecast?.security.currency ??
@@ -198,6 +323,7 @@ export default function App() {
     history?.security.currency ??
     "INR";
   const latest = activeHistory.at(-1);
+  const researchSignal = forecast ? getResearchSignal(forecast) : null;
 
   return (
     <div className="app-shell">
@@ -210,69 +336,141 @@ export default function App() {
       </header>
 
       <main>
-        <section className="hero">
-          <p className="eyebrow">TIME-SERIES INTELLIGENCE</p>
-          <h1>See the trend.<br /><span>Understand the uncertainty.</span></h1>
-          <p className="hero-copy">
-            Explore daily Indian stock forecasts generated by TimesFM on your Mac.
-            Every prediction includes its uncertainty range and source context.
-          </p>
+        <div className="app-tabs" role="tablist" aria-label="Forecast workflows">
+          <button
+            type="button"
+            role="tab"
+            id="research-tab"
+            aria-controls="research-panel"
+            aria-selected={activeTab === "research"}
+            className={activeTab === "research" ? "active" : ""}
+            onClick={() => {
+              setActiveTab("research");
+              const preset =
+                nifty50Presets.find(({ symbol }) => symbol === selected?.symbol) ??
+                defaultNiftySecurity;
+              chooseSecurity(preset, true);
+            }}
+          >
+            NIFTY 50 research
+          </button>
+          <button
+            type="button"
+            role="tab"
+            id="explore-tab"
+            aria-controls="explore-panel"
+            aria-selected={activeTab === "explore"}
+            className={activeTab === "explore" ? "active" : ""}
+            onClick={() => setActiveTab("explore")}
+          >
+            Stock explorer
+          </button>
+        </div>
 
-          <div className="search-wrap">
-            <label htmlFor={inputId}>Search by company or ticker</label>
-            <div className="search-input-wrap">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" />
-              </svg>
-              <input
-                id={inputId}
-                role="combobox"
-                aria-autocomplete="list"
-                aria-controls={resultsId}
-                aria-expanded={searchResults.length > 0}
-                value={query}
-                placeholder="Try Reliance, Infosys, or TCS"
-                autoComplete="off"
-                onChange={(event) => {
-                  setQuery(event.target.value);
-                  if (selected) {
-                    forecastRequestRef.current?.abort();
-                    forecastRequestRef.current = null;
-                    backtestRequestRef.current?.abort();
-                    backtestRequestRef.current = null;
-                    setForecasting(false);
-                    setBacktesting(false);
-                    setSelected(null);
-                    setHistory(null);
-                    setForecast(null);
-                    setBacktest(null);
-                  }
-                }}
-              />
-              {searching && <span className="spinner small" aria-label="Searching" />}
-            </div>
-            <ul
-              id={resultsId}
-              role="listbox"
-              className={`search-results ${searchResults.length ? "open" : ""}`}
-            >
-              {searchResults.map((security) => (
-                <li key={`${security.exchange}-${security.symbol}`} role="option">
-                  <button type="button" onClick={() => chooseSecurity(security)}>
-                    <span>
-                      <strong>{security.name}</strong>
-                      <small>{security.exchange} · {security.currency}</small>
-                    </span>
-                    <b>{security.symbol}</b>
-                  </button>
-                </li>
+        {activeTab === "research" ? (
+          <section
+            className="hero research-hero"
+            id="research-panel"
+            role="tabpanel"
+            aria-labelledby="research-tab"
+          >
+            <p className="eyebrow">NIFTY 50 RESEARCH</p>
+            <h1>Start with a market leader.<br /><span>See the modeled range.</span></h1>
+            <p className="hero-copy">
+              Reliance is selected by default and its 20-session TimesFM forecast
+              starts automatically. Choose another featured constituent to compare
+              its price range and uncertainty.
+            </p>
+            <div className="preset-grid" aria-label="Featured NIFTY 50 constituents">
+              {nifty50Presets.map((security) => (
+                <button
+                  type="button"
+                  key={security.symbol}
+                  className={selected?.symbol === security.symbol ? "active" : ""}
+                  aria-pressed={selected?.symbol === security.symbol}
+                  onClick={() => chooseSecurity(security, true)}
+                >
+                  <span>{security.name.replace(" Limited", "")}</span>
+                  <strong>{security.symbol.replace(".NS", "")}</strong>
+                </button>
               ))}
-            </ul>
-            {!selected && query.trim().length >= 2 && !searching && !searchResults.length && (
-              <p className="search-note">No supported NSE or BSE stock found.</p>
-            )}
-          </div>
-        </section>
+            </div>
+            <p className="preset-note">
+              Featured shortcuts are a research starting point, not a complete
+              live index-membership feed or an investment recommendation.
+            </p>
+          </section>
+        ) : (
+          <section
+            className="hero"
+            id="explore-panel"
+            role="tabpanel"
+            aria-labelledby="explore-tab"
+          >
+            <p className="eyebrow">TIME-SERIES INTELLIGENCE</p>
+            <h1>See the trend.<br /><span>Understand the uncertainty.</span></h1>
+            <p className="hero-copy">
+              Explore daily Indian stock forecasts generated by TimesFM on your Mac.
+              Every prediction includes its uncertainty range and source context.
+            </p>
+
+            <div className="search-wrap">
+              <label htmlFor={inputId}>Search by company or ticker</label>
+              <div className="search-input-wrap">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="m21 21-4.35-4.35m2.35-5.65a8 8 0 1 1-16 0 8 8 0 0 1 16 0Z" />
+                </svg>
+                <input
+                  id={inputId}
+                  role="combobox"
+                  aria-autocomplete="list"
+                  aria-controls={resultsId}
+                  aria-expanded={searchResults.length > 0}
+                  value={query}
+                  placeholder="Try Reliance, Infosys, or TCS"
+                  autoComplete="off"
+                  onChange={(event) => {
+                    setQuery(event.target.value);
+                    if (selected) {
+                      forecastRequestRef.current?.abort();
+                      forecastRequestRef.current = null;
+                      backtestRequestRef.current?.abort();
+                      backtestRequestRef.current = null;
+                      setForecasting(false);
+                      setBacktesting(false);
+                      setSelected(null);
+                      setHistory(null);
+                      setForecast(null);
+                      setBacktest(null);
+                      setAutoForecastSymbol(null);
+                    }
+                  }}
+                />
+                {searching && <span className="spinner small" aria-label="Searching" />}
+              </div>
+              <ul
+                id={resultsId}
+                role="listbox"
+                className={`search-results ${searchResults.length ? "open" : ""}`}
+              >
+                {searchResults.map((security) => (
+                  <li key={`${security.exchange}-${security.symbol}`} role="option">
+                    <button type="button" onClick={() => chooseSecurity(security)}>
+                      <span>
+                        <strong>{security.name}</strong>
+                        <small>{security.exchange} · {security.currency}</small>
+                      </span>
+                      <b>{security.symbol}</b>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+              {!selected && query.trim().length >= 2 && !searching && !searchResults.length && (
+                <p className="search-note">No supported NSE or BSE stock found.</p>
+              )}
+            </div>
+          </section>
+        )}
 
         {error && (
           <div className="error-banner" role="alert">
@@ -374,6 +572,27 @@ export default function App() {
                 </button>
               </div>
             </div>
+
+            {activeTab === "research" && forecast && researchSignal && (
+              <section className={`research-signal ${researchSignal.tone}`} aria-labelledby="research-signal-heading">
+                <div>
+                  <p className="eyebrow">MODEL SCREENING SIGNAL</p>
+                  <h3 id="research-signal-heading">{researchSignal.label}</h3>
+                  <p>{researchSignal.explanation}</p>
+                </div>
+                <div className="signal-range">
+                  <span>
+                    {forecast.metadata.horizon_trading_days}-session modeled change
+                  </span>
+                  <strong>{formatPercent(forecast.analysis.forecast_change_percent)}</strong>
+                </div>
+                <p className="signal-disclaimer">
+                  Use this signal only to choose what to research next. It does not
+                  account for valuation, fundamentals, news, or your circumstances,
+                  and it is not a buy recommendation.
+                </p>
+              </section>
+            )}
 
             <div className="forecast-panel backtest-panel">
               <div>
