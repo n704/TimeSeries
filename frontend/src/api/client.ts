@@ -14,6 +14,7 @@ export class ApiError extends Error {
   readonly code: string;
   readonly retryable: boolean;
   readonly requestId: string;
+  readonly details?: Record<string, unknown>;
 
   constructor(payload: ApiErrorPayload["error"]) {
     super(payload.message);
@@ -21,6 +22,7 @@ export class ApiError extends Error {
     this.code = payload.code;
     this.retryable = payload.retryable;
     this.requestId = payload.request_id;
+    this.details = payload.details;
   }
 }
 

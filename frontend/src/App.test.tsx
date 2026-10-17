@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 import App from "./App";
+import { ApiError } from "./api/client";
 
 const apiMocks = vi.hoisted(() => ({
   createBacktest: vi.fn(),
@@ -11,9 +12,24 @@ const apiMocks = vi.hoisted(() => ({
 
 vi.mock("./api/client", () => ({
   ApiError: class ApiError extends Error {
-    code = "TEST_ERROR";
-    retryable = false;
-    requestId = "req_test";
+    readonly code: string;
+    readonly retryable: boolean;
+    readonly requestId: string;
+    readonly details?: Record<string, unknown>;
+
+    constructor(payload: {
+      code: string;
+      message: string;
+      retryable: boolean;
+      request_id: string;
+      details?: Record<string, unknown>;
+    }) {
+      super(payload.message);
+      this.code = payload.code;
+      this.retryable = payload.retryable;
+      this.requestId = payload.request_id;
+      this.details = payload.details;
+    }
   },
   ...apiMocks,
 }));
@@ -43,6 +59,60 @@ describe("App", () => {
       screen.getByPlaceholderText(/reliance, infosys, or tcs/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/not financial advice/i)).toBeInTheDocument();
+  });
+
+  it("shows available and required trading days when forecast history is insufficient", async () => {
+    const security = {
+      symbol: "TRIVENIPT.NS",
+      name: "Triveni Turbine Limited",
+      exchange: "NSE",
+      region: "India",
+      currency: "INR",
+      instrument_type: "common_stock" as const,
+      timezone: "Asia/Kolkata",
+    };
+    apiMocks.searchSecurities.mockResolvedValue([security]);
+    apiMocks.getHistory.mockResolvedValue({
+      security,
+      prices: [{ date: "2026-10-16", adjusted_close: 810 }],
+      metadata: {
+        provider: "Fixture",
+        retrieved_at: "2026-10-17T00:00:00Z",
+        last_market_date: "2026-10-16",
+        is_stale: false,
+      },
+    });
+    apiMocks.createForecast.mockRejectedValue(
+      new ApiError({
+        code: "INSUFFICIENT_HISTORY",
+        message: "TRIVENIPT.NS does not have enough valid daily history.",
+        retryable: false,
+        request_id: "req_insufficient",
+        details: {
+          available_observations: 74,
+          required_observations: 120,
+        },
+      }),
+    );
+
+    render(<App />);
+    fireEvent.change(
+      screen.getByRole("combobox", { name: /search by company or ticker/i }),
+      { target: { value: "Triveni" } },
+    );
+    await waitFor(() => expect(apiMocks.searchSecurities).toHaveBeenCalled());
+    fireEvent.click(
+      await screen.findByRole("button", { name: /Triveni Turbine Limited/i }),
+    );
+    await waitFor(() => expect(apiMocks.getHistory).toHaveBeenCalled());
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: /generate forecast/i }),
+    );
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Available history: 74 trading days. Minimum required for prediction: 120 trading days.",
+    );
   });
 
   it("back-checks the latest seven sessions against known prices", async () => {
