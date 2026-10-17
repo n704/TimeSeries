@@ -98,6 +98,43 @@ def test_forecast_accepts_canonical_indian_symbol_with_ampersand() -> None:
   assert response.status_code == 200
 
 
+def test_backtest_predicts_last_seven_sessions_from_prior_history() -> None:
+  with make_client() as client:
+    response = client.post(
+        "/api/v1/backtests",
+        json={"symbol": "RELIANCE.NS"},
+    )
+
+  assert response.status_code == 200
+  payload = response.json()
+  assert payload["backtest_id"].startswith("bt_")
+  assert len(payload["points"]) == 7
+  assert all(point["actual"] == point["p50"] for point in payload["points"])
+  assert payload["metrics"] == {
+      "mean_absolute_error": 0.0,
+      "mean_absolute_percentage_error": 0.0,
+      "interval_coverage_percent": 100.0,
+  }
+  assert payload["metadata"]["holdout_sessions"] == 7
+  assert payload["metadata"]["context_observations"] == 143
+  assert payload["metadata"]["context_end_date"] == "2026-05-23"
+  assert "holdout" in payload["disclaimer"]
+
+
+def test_backtest_requires_history_before_the_holdout() -> None:
+  with make_client(history_count=126) as client:
+    response = client.post(
+        "/api/v1/backtests",
+        json={"symbol": "RELIANCE.NS"},
+    )
+
+  assert response.status_code == 422
+  assert response.json()["error"]["details"] == {
+      "required_observations": 127,
+      "available_observations": 126,
+  }
+
+
 def test_api_stays_live_and_provider_closes_when_model_startup_fails() -> None:
   class FailingModel(FakeForecastModel):
     async def load(self) -> None:
@@ -119,11 +156,17 @@ def test_api_stays_live_and_provider_closes_when_model_startup_fails() -> None:
         "/api/v1/forecasts",
         json={"symbol": "RELIANCE.NS", "horizon": 5},
     )
+    backtest = client.post(
+        "/api/v1/backtests",
+        json={"symbol": "RELIANCE.NS"},
+    )
 
   assert liveness.status_code == 200
   assert readiness.status_code == 503
   assert search.status_code == 200
   assert forecast.status_code == 503
   assert forecast.json()["error"]["code"] == "MODEL_NOT_READY"
+  assert backtest.status_code == 503
+  assert backtest.json()["error"]["code"] == "MODEL_NOT_READY"
   assert provider.history_calls == 0
   assert provider.closed

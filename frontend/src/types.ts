@@ -66,6 +66,39 @@ export interface ForecastResponse {
   disclaimer: string;
 }
 
+export interface BacktestPoint {
+  date: string;
+  actual: number;
+  p10: number;
+  p50: number;
+  p90: number;
+}
+
+export interface BacktestResponse {
+  backtest_id: string;
+  security: Security;
+  points: BacktestPoint[];
+  metrics: {
+    mean_absolute_error: number;
+    mean_absolute_percentage_error: number;
+    interval_coverage_percent: number;
+  };
+  metadata: {
+    holdout_sessions: number;
+    context_observations: number;
+    context_start_date: string;
+    context_end_date: string;
+    provider: string;
+    backend: string;
+    model: string;
+    model_version: string;
+    preprocessing_version: string;
+    generated_at: string;
+    is_data_stale: boolean;
+  };
+  disclaimer: string;
+}
+
 export interface ApiErrorPayload {
   error: {
     code: string;

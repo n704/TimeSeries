@@ -181,6 +181,7 @@ The readiness endpoint returns `503` until TimesFM has loaded.
 | `GET` | `/api/v1/securities/search?q=Reliance` | Search supported Indian stocks |
 | `GET` | `/api/v1/securities/RELIANCE.NS/history?range=1y` | Load adjusted-close history |
 | `POST` | `/api/v1/forecasts` | Generate a 5-, 20-, or 60-session forecast |
+| `POST` | `/api/v1/backtests` | Back-check predictions for the latest 7 sessions |
 | `GET` | `/health/live` | Check the API process |
 | `GET` | `/health/ready` | Check whether TimesFM is loaded |
 
@@ -191,6 +192,18 @@ curl -X POST http://localhost:8000/api/v1/forecasts \
   -H 'Content-Type: application/json' \
   -d '{"symbol":"RELIANCE.NS","horizon":20}'
 ```
+
+Example historical back-check:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/backtests \
+  -H 'Content-Type: application/json' \
+  -d '{"symbol":"RELIANCE.NS"}'
+```
+
+The back-check hides the latest seven adjusted closes, predicts them using only
+earlier observations, and reports median-error and p10-p90 coverage metrics.
+It is a single historical holdout, not a guarantee of future accuracy.
 
 ## Market-data scope
 

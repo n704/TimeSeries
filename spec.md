@@ -135,7 +135,24 @@ the provider returns one unique active listing.
   explicit error. The API must not substitute a heuristic forecast and present
   it as TimesFM output.
 
-### 5.4 Trend analysis
+### 5.4 Historical back-check
+
+- `FR-BACKTEST-01`: The user can request a back-check for the latest seven valid
+  trading sessions of the selected security.
+- `FR-BACKTEST-02`: Remove all seven holdout observations before inference. The
+  model context must contain only observations earlier than the first holdout
+  date.
+- `FR-BACKTEST-03`: Require at least 120 context observations in addition to the
+  seven holdout observations.
+- `FR-BACKTEST-04`: Predict exactly seven steps with the configured TimesFM
+  adapter and pair each output step with the corresponding known market date.
+- `FR-BACKTEST-05`: Return actual adjusted close, p10, p50, and p90 for each
+  holdout session plus mean absolute error, mean absolute percentage error, and
+  p10-p90 interval coverage.
+- `FR-BACKTEST-06`: Clearly identify the result as one historical holdout. Do
+  not present it as a guarantee of future performance or financial advice.
+
+### 5.5 Trend analysis
 
 The backend calculates deterministic explanatory metrics from historical and
 forecast values:
@@ -159,7 +176,7 @@ The summary must use neutral language, for example:
 The summary must not state that the stock "will" reach a price and must not use
 recommendation language.
 
-### 5.5 Model and data disclosure
+### 5.6 Model and data disclosure
 
 Every forecast view must show:
 
@@ -171,7 +188,7 @@ Every forecast view must show:
 - A warning when the latest market observation is more than three expected
   trading sessions old.
 
-### 5.6 Chart visualizations
+### 5.7 Chart visualizations
 
 Charts are a required part of the MVP, not an optional enhancement:
 
@@ -648,13 +665,71 @@ Success, `200`:
 `history` in the forecast response contains the latest 120 observations needed
 for the default result chart, not necessarily the complete model context.
 
-### 10.4 Health endpoints
+### 10.4 Back-check the latest seven sessions
+
+`POST /api/v1/backtests`
+
+Request:
+
+```json
+{
+  "symbol": "RELIANCE.NS"
+}
+```
+
+Success, `200`:
+
+```json
+{
+  "backtest_id": "bt_01J...",
+  "security": {
+    "symbol": "RELIANCE.NS",
+    "name": "Reliance Industries Limited",
+    "exchange": "NSE",
+    "region": "India",
+    "currency": "INR"
+  },
+  "points": [
+    {
+      "date": "2026-10-08",
+      "actual": 1188.4,
+      "p10": 1152.1,
+      "p50": 1194.8,
+      "p90": 1238.6
+    }
+  ],
+  "metrics": {
+    "mean_absolute_error": 14.25,
+    "mean_absolute_percentage_error": 1.18,
+    "interval_coverage_percent": 85.71
+  },
+  "metadata": {
+    "holdout_sessions": 7,
+    "context_observations": 1240,
+    "context_start_date": "2021-10-18",
+    "context_end_date": "2026-10-07",
+    "provider": "Yahoo Finance",
+    "backend": "local-mlx",
+    "model": "google/timesfm-3.0-pytorch",
+    "model_version": "3.0.2",
+    "preprocessing_version": "1",
+    "generated_at": "2026-10-17T12:41:03Z",
+    "is_data_stale": false
+  },
+  "disclaimer": "This historical back-check measures one seven-session holdout and does not guarantee future forecasting performance or provide financial advice."
+}
+```
+
+The response always contains exactly seven points. The context end date must
+precede the first returned point.
+
+### 10.5 Health endpoints
 
 - `GET /health/live`: process is running; does not contact external services.
 - `GET /health/ready`: model is loaded and required internal dependencies are
   available. It must not repeatedly call the market-data provider.
 
-### 10.5 Error format
+### 10.6 Error format
 
 All API errors use:
 
@@ -825,7 +900,7 @@ required value is absent or inconsistent with local development mode.
 
 ### Future enhancements
 
-- Rolling historical backtests with MAE, MAPE/sMAPE, and directional accuracy.
+- Rolling multi-window backtests with sMAPE and directional accuracy.
 - Multiple comparable forecast models, clearly identified.
 - TimesFM multivariate/covariate support after documented evaluation.
 - Additional licensed exchanges and asset types.
@@ -865,6 +940,8 @@ The MVP is complete only when:
     backend can serve requests.
 13. Every result visibly identifies its data source, last market date, model
     version, generation time, and financial disclaimer.
+14. A user can back-check the latest seven sessions, inspect actual versus
+    predicted prices, and confirm that the model context ends before the holdout.
 
 ## 18. References
 

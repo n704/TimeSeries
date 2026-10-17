@@ -116,6 +116,20 @@ Content-Type: application/json
 
 Supported horizons: `5`, `20`, and `60`.
 
+### Seven-session back-check
+
+```http
+POST /api/v1/backtests
+Content-Type: application/json
+
+{"symbol":"RELIANCE.NS"}
+```
+
+The endpoint withholds the latest seven valid adjusted-close observations,
+predicts those seven sessions using only the earlier context, and returns the
+actual and p10/p50/p90 values. It also reports mean absolute error, mean
+absolute percentage error, and p10-p90 interval coverage.
+
 ## Data and model flow
 
 1. Fetch up to five years of adjusted daily close data.
@@ -126,6 +140,9 @@ Supported horizons: `5`, `20`, and `60`.
 6. Map output steps to future Indian exchange sessions.
 7. Calculate moving averages, changes, trend, and uncertainty width.
 8. Return the most recent 120 historical points for the default forecast chart.
+
+For a back-check, the latest seven observations are removed before inference
+and are used only after inference to calculate holdout metrics.
 
 ## Tests
 
@@ -141,6 +158,7 @@ Tests cover:
 - analysis calculations and wording;
 - endpoint success and error contracts;
 - insufficient history;
+- seven-session holdout isolation and metrics;
 - application startup cleanup;
 - local adapter checkpoint requirements;
 - decile-to-p10/p50/p90 mapping.

@@ -41,8 +41,11 @@ class SearchResponse(BaseModel):
   results: list[Security]
 
 
-class ForecastRequest(BaseModel):
+class SecurityRequest(BaseModel):
   symbol: str = Field(min_length=1, max_length=20, pattern=r"^[A-Za-z0-9.&\-^]+$")
+
+
+class ForecastRequest(SecurityRequest):
   horizon: Literal[5, 20, 60]
 
 
@@ -87,6 +90,47 @@ class ForecastResponse(BaseModel):
   forecast: list[ForecastPoint]
   analysis: Analysis
   metadata: ForecastMetadata
+  disclaimer: str
+
+
+class BacktestRequest(SecurityRequest):
+  pass
+
+
+class BacktestPoint(BaseModel):
+  date: date
+  actual: float = Field(gt=0)
+  p10: float = Field(gt=0)
+  p50: float = Field(gt=0)
+  p90: float = Field(gt=0)
+
+
+class BacktestMetrics(BaseModel):
+  mean_absolute_error: float = Field(ge=0)
+  mean_absolute_percentage_error: float = Field(ge=0)
+  interval_coverage_percent: float = Field(ge=0, le=100)
+
+
+class BacktestMetadata(BaseModel):
+  holdout_sessions: int
+  context_observations: int
+  context_start_date: date
+  context_end_date: date
+  provider: str
+  backend: str
+  model: str
+  model_version: str
+  preprocessing_version: str = "1"
+  generated_at: datetime
+  is_data_stale: bool
+
+
+class BacktestResponse(BaseModel):
+  backtest_id: str
+  security: Security
+  points: list[BacktestPoint]
+  metrics: BacktestMetrics
+  metadata: BacktestMetadata
   disclaimer: str
 
 

@@ -28,6 +28,7 @@ common-stock forecasts. The application:
 - searches supported NSE and BSE listings by company name or ticker;
 - loads adjusted daily close history;
 - generates 5-, 20-, or 60-session forecasts;
+- back-checks a seven-session holdout against known adjusted closes;
 - displays p10, p50, and p90 output from TimesFM;
 - visualizes historical prices, moving averages, median predictions, and an
   uncertainty band.
@@ -91,6 +92,7 @@ frontend/src/styles.css   Responsive visual system
     sell, or hold advice.
 11. Abort or ignore stale browser requests when the selected symbol changes.
 12. Keep provider secrets and credentials out of the frontend and logs.
+13. A back-check must exclude all seven holdout observations from model context.
 
 ## Local commands
 

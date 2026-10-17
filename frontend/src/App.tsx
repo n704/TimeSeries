@@ -2,12 +2,14 @@ import { useEffect, useId, useRef, useState } from "react";
 
 import {
   ApiError,
+  createBacktest,
   createForecast,
   getHistory,
   searchSecurities,
 } from "./api/client";
 import { PriceChart } from "./components/PriceChart";
 import type {
+  BacktestResponse,
   ForecastHorizon,
   ForecastResponse,
   HistoryRange,
@@ -42,7 +44,9 @@ export default function App() {
   const inputId = useId();
   const resultsId = useId();
   const resultHeadingRef = useRef<HTMLHeadingElement>(null);
+  const backtestHeadingRef = useRef<HTMLHeadingElement>(null);
   const forecastRequestRef = useRef<AbortController | null>(null);
+  const backtestRequestRef = useRef<AbortController | null>(null);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Security[]>([]);
   const [searching, setSearching] = useState(false);
@@ -51,8 +55,10 @@ export default function App() {
   const [horizon, setHorizon] = useState<ForecastHorizon>(20);
   const [history, setHistory] = useState<HistoryResponse | null>(null);
   const [forecast, setForecast] = useState<ForecastResponse | null>(null);
+  const [backtest, setBacktest] = useState<BacktestResponse | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [forecasting, setForecasting] = useState(false);
+  const [backtesting, setBacktesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMovingAverages, setShowMovingAverages] = useState(false);
 
@@ -105,6 +111,8 @@ export default function App() {
     () => () => {
       forecastRequestRef.current?.abort();
       forecastRequestRef.current = null;
+      backtestRequestRef.current?.abort();
+      backtestRequestRef.current = null;
     },
     [selected?.symbol],
   );
@@ -112,12 +120,16 @@ export default function App() {
   function chooseSecurity(security: Security) {
     forecastRequestRef.current?.abort();
     forecastRequestRef.current = null;
+    backtestRequestRef.current?.abort();
+    backtestRequestRef.current = null;
     setForecasting(false);
+    setBacktesting(false);
     setSelected(security);
     setQuery(security.name);
     setSearchResults([]);
     setHistory(null);
     setForecast(null);
+    setBacktest(null);
     setError(null);
   }
 
@@ -144,8 +156,35 @@ export default function App() {
     }
   }
 
+  async function runBacktest() {
+    if (!selected) return;
+    backtestRequestRef.current?.abort();
+    const controller = new AbortController();
+    backtestRequestRef.current = controller;
+    setBacktesting(true);
+    setError(null);
+    try {
+      const result = await createBacktest(selected.symbol, controller.signal);
+      if (backtestRequestRef.current === controller && !controller.signal.aborted) {
+        setBacktest(result);
+        window.setTimeout(() => backtestHeadingRef.current?.focus(), 0);
+      }
+    } catch (backtestError) {
+      if (!controller.signal.aborted) setError(readableError(backtestError));
+    } finally {
+      if (backtestRequestRef.current === controller) {
+        backtestRequestRef.current = null;
+        setBacktesting(false);
+      }
+    }
+  }
+
   const activeHistory = history?.prices ?? forecast?.history ?? [];
-  const currency = forecast?.security.currency ?? history?.security.currency ?? "INR";
+  const currency =
+    forecast?.security.currency ??
+    backtest?.security.currency ??
+    history?.security.currency ??
+    "INR";
   const latest = activeHistory.at(-1);
 
   return (
@@ -187,10 +226,14 @@ export default function App() {
                   if (selected) {
                     forecastRequestRef.current?.abort();
                     forecastRequestRef.current = null;
+                    backtestRequestRef.current?.abort();
+                    backtestRequestRef.current = null;
                     setForecasting(false);
+                    setBacktesting(false);
                     setSelected(null);
                     setHistory(null);
                     setForecast(null);
+                    setBacktest(null);
                   }
                 }}
               />
@@ -227,7 +270,10 @@ export default function App() {
         )}
 
         {selected && (
-          <section className="workspace" aria-busy={loadingHistory || forecasting}>
+          <section
+            className="workspace"
+            aria-busy={loadingHistory || forecasting || backtesting}
+          >
             <div className="security-heading">
               <div>
                 <p className="ticker">{selected.symbol} · {selected.exchange}</p>
@@ -310,12 +356,108 @@ export default function App() {
                   type="button"
                   className="primary-button"
                   onClick={generateForecast}
-                  disabled={!history || forecasting}
+                  disabled={!history || forecasting || backtesting}
                 >
                   {forecasting ? <><span className="spinner small" /> Forecasting…</> : "Generate forecast"}
                 </button>
               </div>
             </div>
+
+            <div className="forecast-panel backtest-panel">
+              <div>
+                <p className="eyebrow">HISTORICAL BACK-CHECK</p>
+                <h3>Test the latest 7 known sessions</h3>
+                <p className="backtest-copy">
+                  Hide the latest seven closes, predict them from earlier data,
+                  then compare the estimates with what actually happened.
+                </p>
+              </div>
+              <button
+                type="button"
+                className="primary-button secondary"
+                onClick={runBacktest}
+                disabled={!history || forecasting || backtesting}
+              >
+                {backtesting ? (
+                  <><span className="spinner small" /> Back-checking…</>
+                ) : (
+                  "Back-check last 7 sessions"
+                )}
+              </button>
+            </div>
+
+            {backtest && (
+              <section className="results" aria-labelledby="backtest-result">
+                <div className="result-intro">
+                  <p className="trend-chip">7-session holdout</p>
+                  <h2
+                    id="backtest-result"
+                    ref={backtestHeadingRef}
+                    tabIndex={-1}
+                  >
+                    Historical back-check
+                  </h2>
+                  <p>
+                    TimesFM saw data only through {backtest.metadata.context_end_date}.
+                    Its next seven estimates are compared with the known closes below.
+                  </p>
+                </div>
+                <div className="metric-grid backtest-metrics">
+                  <article>
+                    <span>Mean absolute error</span>
+                    <strong>
+                      {formatPrice(backtest.metrics.mean_absolute_error, currency)}
+                    </strong>
+                  </article>
+                  <article>
+                    <span>Mean absolute percentage error</span>
+                    <strong>
+                      {backtest.metrics.mean_absolute_percentage_error.toFixed(2)}%
+                    </strong>
+                  </article>
+                  <article>
+                    <span>p10-p90 coverage</span>
+                    <strong>
+                      {backtest.metrics.interval_coverage_percent.toFixed(2)}%
+                    </strong>
+                  </article>
+                </div>
+                <div className="forecast-details backtest-details">
+                  <div className="table-scroll">
+                    <table>
+                      <caption>Predicted and actual prices for the holdout sessions</caption>
+                      <thead>
+                        <tr>
+                          <th>Date</th>
+                          <th>Actual</th>
+                          <th>Median</th>
+                          <th>Error</th>
+                          <th>p10</th>
+                          <th>p90</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {backtest.points.map((point) => (
+                          <tr key={point.date}>
+                            <td>{point.date}</td>
+                            <td>{formatPrice(point.actual, currency)}</td>
+                            <td>{formatPrice(point.p50, currency)}</td>
+                            <td>
+                              {formatPercent(
+                                ((point.p50 - point.actual) / point.actual) * 100,
+                              )}
+                            </td>
+                            <td>{formatPrice(point.p10, currency)}</td>
+                            <td>{formatPrice(point.p90, currency)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <p className="disclaimer">{backtest.disclaimer}</p>
+              </section>
+            )}
 
             {forecast && (
               <section className="results" aria-labelledby="forecast-result">
@@ -394,7 +536,15 @@ export default function App() {
         <p>Daily NSE and BSE stock forecasts only · Not financial advice.</p>
       </footer>
       <div className="sr-only" aria-live="polite">
-        {forecasting ? "Generating forecast" : forecast ? "Forecast complete" : ""}
+        {backtesting
+          ? "Running historical back-check"
+          : forecasting
+            ? "Generating forecast"
+            : backtest
+              ? "Historical back-check complete"
+              : forecast
+                ? "Forecast complete"
+                : ""}
       </div>
     </div>
   );

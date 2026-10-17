@@ -8,6 +8,10 @@ from fastapi import APIRouter, Query, Request
 from app.errors import AppError
 from app.providers.base import MarketDataProvider
 from app.schemas import (
+    BacktestMetadata,
+    BacktestPoint,
+    BacktestRequest,
+    BacktestResponse,
     ForecastMetadata,
     ForecastPoint,
     ForecastRequest,
@@ -16,6 +20,7 @@ from app.schemas import (
     SearchResponse,
 )
 from app.services.analysis import analyze_forecast
+from app.services.backtest import evaluate_backtest
 from app.services.calendar import TradingCalendar
 from app.services.forecast import ForecastModel
 
@@ -30,6 +35,11 @@ DISCLAIMER = (
     "This forecast is an uncertain statistical estimate for informational "
     "purposes only and is not financial advice."
 )
+BACKTEST_SESSIONS = 7
+BACKTEST_DISCLAIMER = (
+    "This historical back-check measures one seven-session holdout and does not "
+    "guarantee future forecasting performance or provide financial advice."
+)
 
 
 def _provider(request: Request) -> MarketDataProvider:
@@ -42,6 +52,16 @@ def _model(request: Request) -> ForecastModel:
 
 def _calendar(request: Request) -> TradingCalendar:
   return request.app.state.trading_calendar
+
+
+def _require_model_ready(request: Request) -> None:
+  if not request.app.state.model_ready:
+    raise AppError(
+        "MODEL_NOT_READY",
+        "TimesFM is not loaded. Check the backend model configuration.",
+        status_code=503,
+        retryable=True,
+    )
 
 
 @router.get("/securities/search", response_model=SearchResponse)
@@ -79,13 +99,7 @@ async def create_forecast(
     body: ForecastRequest,
     request: Request,
 ) -> ForecastResponse:
-  if not request.app.state.model_ready:
-    raise AppError(
-        "MODEL_NOT_READY",
-        "TimesFM is not loaded. Check the backend model configuration.",
-        status_code=503,
-        retryable=True,
-    )
+  _require_model_ready(request)
   history = await _provider(request).history(body.symbol.upper(), "5y")
   minimum = request.app.state.settings.min_history_observations
   if len(history.prices) < minimum:
@@ -139,4 +153,69 @@ async def create_forecast(
           is_data_stale=history.metadata.is_stale,
       ),
       disclaimer=DISCLAIMER,
+  )
+
+
+@router.post("/backtests", response_model=BacktestResponse)
+async def create_backtest(
+    body: BacktestRequest,
+    request: Request,
+) -> BacktestResponse:
+  _require_model_ready(request)
+  history = await _provider(request).history(body.symbol.upper(), "5y")
+  required = request.app.state.settings.min_history_observations + BACKTEST_SESSIONS
+  if len(history.prices) < required:
+    raise AppError(
+        "INSUFFICIENT_HISTORY",
+        f"{body.symbol.upper()} does not have enough valid daily history "
+        "for a seven-session back-check.",
+        status_code=422,
+        details={
+            "required_observations": required,
+            "available_observations": len(history.prices),
+        },
+    )
+
+  context_prices = history.prices[:-BACKTEST_SESSIONS]
+  actual_prices = history.prices[-BACKTEST_SESSIONS:]
+  context = np.asarray(
+      [point.adjusted_close for point in context_prices],
+      dtype=np.float32,
+  )
+  output = await _model(request).predict(context, BACKTEST_SESSIONS)
+  points = [
+      BacktestPoint(
+          date=actual.date,
+          actual=actual.adjusted_close,
+          p10=p10,
+          p50=p50,
+          p90=p90,
+      )
+      for actual, p10, p50, p90 in zip(
+          actual_prices,
+          output.p10,
+          output.p50,
+          output.p90,
+          strict=True,
+      )
+  ]
+  model = _model(request)
+  return BacktestResponse(
+      backtest_id=f"bt_{uuid4().hex}",
+      security=history.security,
+      points=points,
+      metrics=evaluate_backtest(points),
+      metadata=BacktestMetadata(
+          holdout_sessions=BACKTEST_SESSIONS,
+          context_observations=len(context_prices),
+          context_start_date=context_prices[0].date,
+          context_end_date=context_prices[-1].date,
+          provider=history.metadata.provider,
+          backend=model.backend_name,
+          model=model.model_id,
+          model_version=model.model_version,
+          generated_at=datetime.now(UTC),
+          is_data_stale=history.metadata.is_stale,
+      ),
+      disclaimer=BACKTEST_DISCLAIMER,
   )

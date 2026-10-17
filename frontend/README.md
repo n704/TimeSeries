@@ -54,6 +54,7 @@ market-data credentials, model credentials, or checkpoint paths.
 5. Optionally change the display range or moving-average overlays.
 6. Choose 5, 20, or 60 trading sessions.
 7. Generate and display the forecast, metrics, metadata, and disclaimer.
+8. Optionally back-check the model against the latest seven known sessions.
 
 ## Request state rules
 
@@ -62,6 +63,8 @@ market-data credentials, model credentials, or checkpoint paths.
 - A stale response must never overwrite the currently selected stock.
 - Range changes affect historical display but not the forecast horizon.
 - Forecast success moves keyboard focus to the result heading.
+- Back-check success moves keyboard focus to its result heading.
+- A symbol change aborts both forecast and back-check requests.
 
 Maintain these rules when refactoring state or adopting a server-state library.
 

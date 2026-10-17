@@ -1,5 +1,6 @@
 import type {
   ApiErrorPayload,
+  BacktestResponse,
   ForecastHorizon,
   ForecastResponse,
   HistoryRange,
@@ -76,6 +77,17 @@ export function createForecast(
   return request("/forecasts", {
     method: "POST",
     body: JSON.stringify({ symbol, horizon }),
+    signal,
+  });
+}
+
+export function createBacktest(
+  symbol: string,
+  signal: AbortSignal,
+): Promise<BacktestResponse> {
+  return request("/backtests", {
+    method: "POST",
+    body: JSON.stringify({ symbol }),
     signal,
   });
 }
