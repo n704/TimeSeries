@@ -1,9 +1,9 @@
 from functools import lru_cache
 from pathlib import Path
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -14,7 +14,7 @@ class Settings(BaseSettings):
   )
 
   app_env: Literal["development", "test"] = "development"
-  allowed_origins: list[str] = ["http://localhost:5173"]
+  allowed_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
   market_data_provider: Literal["yahoo"] = "yahoo"
   timesfm_backend: Literal["mlx", "pytorch"] = "mlx"
   timesfm_checkpoint_id: str = "google/timesfm-3.0-pytorch"

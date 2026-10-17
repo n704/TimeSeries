@@ -10,12 +10,13 @@ from app.services.forecast import ModelForecast
 class FakeMarketDataProvider:
   def __init__(self, count: int = 150) -> None:
     self.closed = False
+    self.history_calls = 0
     self.security = Security(
-        symbol="AAPL",
-        name="Apple Inc.",
-        exchange="NASDAQ",
-        currency="USD",
-        timezone="America/New_York",
+        symbol="RELIANCE.NS",
+        name="Reliance Industries Limited",
+        exchange="NSE",
+        currency="INR",
+        timezone="Asia/Kolkata",
     )
     start = date(2026, 1, 1)
     self.prices = [
@@ -24,9 +25,14 @@ class FakeMarketDataProvider:
     ]
 
   async def search(self, query: str, limit: int) -> list[Security]:
-    return [self.security] if query.lower() in {"aa", "aapl", "apple"} else []
+    return (
+        [self.security]
+        if query.lower() in {"re", "reliance", "reliance.ns"}
+        else []
+    )
 
   async def history(self, symbol: str, period: str) -> HistoryData:
+    self.history_calls += 1
     return HistoryData(
         security=self.security,
         prices=self.prices,
@@ -61,5 +67,6 @@ class FakeForecastModel:
 
 
 class FakeTradingCalendar:
-  def next_sessions(self, after: date, count: int) -> list[date]:
+  def next_sessions(self, exchange: str, after: date, count: int) -> list[date]:
+    assert exchange == "NSE"
     return [after + timedelta(days=index + 1) for index in range(count)]

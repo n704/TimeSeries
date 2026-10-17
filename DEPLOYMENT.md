@@ -97,7 +97,9 @@ curl --fail http://127.0.0.1:8000/health/live
 curl --fail http://127.0.0.1:8000/health/ready
 ```
 
-The process is not ready until the model is loaded.
+The process is not ready until the model is loaded. If the local checkpoint is
+missing or invalid, the process remains live for search and history requests,
+while readiness and forecast requests return `503`.
 
 ## Local release build
 

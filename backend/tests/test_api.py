@@ -1,4 +1,3 @@
-import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
@@ -22,11 +21,22 @@ def make_client(history_count: int = 150) -> TestClient:
 
 def test_search_and_history_contracts() -> None:
   with make_client() as client:
-    search = client.get("/api/v1/securities/search", params={"q": "Apple"})
-    history = client.get("/api/v1/securities/AAPL/history", params={"range": "1y"})
+    search = client.get("/api/v1/securities/search", params={"q": "Reliance"})
+    history = client.get(
+        "/api/v1/securities/RELIANCE.NS/history",
+        params={"range": "1y"},
+    )
 
   assert search.status_code == 200
-  assert search.json()["results"][0]["symbol"] == "AAPL"
+  assert search.json()["results"][0] == {
+      "symbol": "RELIANCE.NS",
+      "name": "Reliance Industries Limited",
+      "exchange": "NSE",
+      "region": "India",
+      "currency": "INR",
+      "instrument_type": "common_stock",
+      "timezone": "Asia/Kolkata",
+  }
   assert history.status_code == 200
   assert len(history.json()["prices"]) == 150
   assert history.json()["metadata"]["provider"] == "Fixture"
@@ -36,7 +46,7 @@ def test_forecast_contract_contains_chart_data_and_analysis() -> None:
   with make_client() as client:
     response = client.post(
         "/api/v1/forecasts",
-        json={"symbol": "AAPL", "horizon": 20},
+        json={"symbol": "RELIANCE.NS", "horizon": 20},
     )
 
   assert response.status_code == 200
@@ -54,7 +64,7 @@ def test_forecast_rejects_insufficient_history() -> None:
   with make_client(history_count=25) as client:
     response = client.post(
         "/api/v1/forecasts",
-        json={"symbol": "AAPL", "horizon": 5},
+        json={"symbol": "RELIANCE.NS", "horizon": 5},
     )
 
   assert response.status_code == 422
@@ -69,7 +79,7 @@ def test_invalid_horizon_uses_public_error_shape() -> None:
   with make_client() as client:
     response = client.post(
         "/api/v1/forecasts",
-        json={"symbol": "AAPL", "horizon": 7},
+        json={"symbol": "RELIANCE.NS", "horizon": 7},
     )
 
   assert response.status_code == 422
@@ -78,7 +88,17 @@ def test_invalid_horizon_uses_public_error_shape() -> None:
   assert payload["request_id"].startswith("req_")
 
 
-def test_provider_closes_when_model_startup_fails() -> None:
+def test_forecast_accepts_canonical_indian_symbol_with_ampersand() -> None:
+  with make_client() as client:
+    response = client.post(
+        "/api/v1/forecasts",
+        json={"symbol": "M&M.NS", "horizon": 5},
+    )
+
+  assert response.status_code == 200
+
+
+def test_api_stays_live_and_provider_closes_when_model_startup_fails() -> None:
   class FailingModel(FakeForecastModel):
     async def load(self) -> None:
       raise RuntimeError("model load failed")
@@ -91,8 +111,19 @@ def test_provider_closes_when_model_startup_fails() -> None:
       trading_calendar=FakeTradingCalendar(),
   )
 
-  with pytest.raises(RuntimeError, match="model load failed"):
-    with TestClient(app):
-      pass
+  with TestClient(app) as client:
+    liveness = client.get("/health/live")
+    readiness = client.get("/health/ready")
+    search = client.get("/api/v1/securities/search", params={"q": "Reliance"})
+    forecast = client.post(
+        "/api/v1/forecasts",
+        json={"symbol": "RELIANCE.NS", "horizon": 5},
+    )
 
+  assert liveness.status_code == 200
+  assert readiness.status_code == 503
+  assert search.status_code == 200
+  assert forecast.status_code == 503
+  assert forecast.json()["error"]["code"] == "MODEL_NOT_READY"
+  assert provider.history_calls == 0
   assert provider.closed

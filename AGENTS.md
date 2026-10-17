@@ -22,10 +22,10 @@ Scoped instructions also live in:
 
 ## Product scope
 
-TimeSeries Forecast Lab is a Mac-first research application for daily U.S.
+TimeSeries Forecast Lab is a Mac-first research application for daily Indian
 common-stock forecasts. The application:
 
-- searches supported U.S. listings by company name or ticker;
+- searches supported NSE and BSE listings by company name or ticker;
 - loads adjusted daily close history;
 - generates 5-, 20-, or 60-session forecasts;
 - displays p10, p50, and p90 output from TimesFM;
@@ -45,7 +45,7 @@ React SPA
   v
 FastAPI
   |-- MarketDataProvider ----> Yahoo Finance (development adapter)
-  |-- TradingCalendar -------> XNYS exchange calendar
+  |-- TradingCalendar -------> NSE/BSE exchange calendars
   |-- ForecastModel ---------> LocalTimesFMAdapter
   `-- AnalysisService -------> neutral trend metrics and summary
 ```

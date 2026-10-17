@@ -14,6 +14,10 @@ describe("App", () => {
     expect(
       screen.getByRole("combobox", { name: /search by company or ticker/i }),
     ).toBeInTheDocument();
+    expect(screen.getByText(/daily indian stock forecasts/i)).toBeInTheDocument();
+    expect(
+      screen.getByPlaceholderText(/reliance, infosys, or tcs/i),
+    ).toBeInTheDocument();
     expect(screen.getByText(/not financial advice/i)).toBeInTheDocument();
   });
 });

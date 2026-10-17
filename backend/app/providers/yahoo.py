@@ -1,4 +1,5 @@
 import asyncio
+import math
 from datetime import UTC, date, datetime
 from typing import Any
 from urllib.parse import quote
@@ -12,13 +13,8 @@ from app.schemas import HistoryMetadata, InstrumentType, PricePoint, Security
 SEARCH_URL = "https://query2.finance.yahoo.com/v1/finance/search"
 CHART_URL = "https://query1.finance.yahoo.com/v8/finance/chart"
 SUPPORTED_EXCHANGES = {
-    "ASE": "NYSE American",
-    "BTS": "NYSE Arca",
-    "NCM": "NASDAQ",
-    "NGM": "NASDAQ",
-    "NMS": "NASDAQ",
-    "NYQ": "NYSE",
-    "PCX": "NYSE Arca",
+    "BSE": "BSE",
+    "NSI": "NSE",
 }
 
 
@@ -58,8 +54,9 @@ class YahooMarketDataProvider:
               symbol=str(symbol).upper(),
               name=str(name),
               exchange=SUPPORTED_EXCHANGES[exchange_code],
-              currency=str(quote_data.get("currency") or "USD"),
+              currency=str(quote_data.get("currency") or "INR"),
               instrument_type=InstrumentType.COMMON_STOCK,
+              timezone="Asia/Kolkata",
           )
       )
       if len(results) == limit:
@@ -89,10 +86,13 @@ class YahooMarketDataProvider:
     result = results[0]
     meta = result.get("meta", {})
     exchange_name = str(meta.get("exchangeName", ""))
-    if exchange_name not in SUPPORTED_EXCHANGES:
+    if (
+        exchange_name not in SUPPORTED_EXCHANGES
+        or meta.get("instrumentType") != "EQUITY"
+    ):
       raise AppError(
           "UNSUPPORTED_SECURITY",
-          f"{symbol.upper()} is not a supported U.S. common-stock listing.",
+          f"{symbol.upper()} is not a supported Indian common-stock listing.",
           status_code=422,
       )
 
@@ -104,7 +104,11 @@ class YahooMarketDataProvider:
 
     prices_by_date: dict[date, PricePoint] = {}
     for timestamp, value in zip(timestamps, values, strict=False):
-      if not isinstance(value, (int, float)) or value <= 0:
+      if (
+          not isinstance(value, (int, float))
+          or not math.isfinite(value)
+          or value <= 0
+      ):
         continue
       market_date = datetime.fromtimestamp(timestamp, tz=UTC).date()
       prices_by_date[market_date] = PricePoint(
@@ -121,8 +125,8 @@ class YahooMarketDataProvider:
         symbol=str(meta.get("symbol") or symbol).upper(),
         name=str(meta.get("longName") or meta.get("shortName") or symbol.upper()),
         exchange=SUPPORTED_EXCHANGES[exchange_name],
-        currency=str(meta.get("currency") or "USD"),
-        timezone=str(meta.get("exchangeTimezoneName") or "America/New_York"),
+        currency=str(meta.get("currency") or "INR"),
+        timezone=str(meta.get("exchangeTimezoneName") or "Asia/Kolkata"),
     )
     return HistoryData(
         security=security,

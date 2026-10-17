@@ -27,7 +27,7 @@ app/api/routes.py
 | `app/errors.py` | Expected application error type |
 | `app/providers/base.py` | Market-data protocol and normalized history |
 | `app/providers/yahoo.py` | Yahoo search/history adapter |
-| `app/services/calendar.py` | Future XNYS trading sessions |
+| `app/services/calendar.py` | Future NSE and BSE trading sessions |
 | `app/services/forecast.py` | Forecast protocol and local TimesFM adapter |
 | `app/services/analysis.py` | Trend metrics and neutral summary |
 | `app/api/routes.py` | `/api/v1` endpoints and orchestration |
@@ -64,8 +64,10 @@ uv run hf download google/timesfm-3.0-pytorch \
   --local-dir "$HOME/.cache/timesfm/google-timesfm-3.0-pytorch"
 ```
 
-Set `TIMESFM_CHECKPOINT_PATH` to the absolute downloaded directory. Startup
-fails if the path is absent or empty. The API does not download model files.
+Set `TIMESFM_CHECKPOINT_PATH` to the absolute downloaded directory. If the path
+is absent or empty, the API remains available for search and history while
+readiness and forecasting remain unavailable. The API does not download model
+files.
 
 ## Run
 
@@ -83,18 +85,22 @@ Health endpoints:
 - `/health/live` reports that the process is alive.
 - `/health/ready` reports readiness only after the model adapter loads.
 
+A missing model checkpoint does not prevent search and history requests. In
+that state, `/health/ready` returns `503` and forecast requests return the
+structured `MODEL_NOT_READY` error.
+
 ## API
 
 ### Search
 
 ```http
-GET /api/v1/securities/search?q=Apple&limit=8
+GET /api/v1/securities/search?q=Reliance&limit=8
 ```
 
 ### History
 
 ```http
-GET /api/v1/securities/AAPL/history?range=1y
+GET /api/v1/securities/RELIANCE.NS/history?range=1y
 ```
 
 Supported ranges: `6m`, `1y`, `2y`, and `5y`.
@@ -105,7 +111,7 @@ Supported ranges: `6m`, `1y`, `2y`, and `5y`.
 POST /api/v1/forecasts
 Content-Type: application/json
 
-{"symbol":"AAPL","horizon":20}
+{"symbol":"RELIANCE.NS","horizon":20}
 ```
 
 Supported horizons: `5`, `20`, and `60`.
@@ -117,7 +123,7 @@ Supported horizons: `5`, `20`, and `60`.
 3. Convert the context to `float32`.
 4. Run the configured singleton `ForecastModel`.
 5. Extract and validate p10, p50, and p90.
-6. Map output steps to future XNYS sessions.
+6. Map output steps to future Indian exchange sessions.
 7. Calculate moving averages, changes, trend, and uncertainty width.
 8. Return the most recent 120 historical points for the default forecast chart.
 
@@ -160,4 +166,4 @@ the root `DEPLOYMENT.md`.
 - More Uvicorn workers mean more model copies and substantially more memory.
 - Calendar dates must come from `TradingCalendar`; weekends-only logic is not
   sufficient.
-- Provider clients must close even when model loading fails.
+- Provider clients must close on shutdown even when model loading fails.

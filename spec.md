@@ -12,14 +12,15 @@
 
 ## 1. Product summary
 
-Build a responsive web application where a user searches for a publicly traded
-common stock by company name or ticker, reviews its recent daily market history,
-and requests a time-series forecast. A Python backend retrieves and validates
-market data, runs TimesFM, calculates trend indicators, and returns a structured
-analysis to a React frontend. The initial implementation is a local development
-prototype that runs TimesFM from a checkpoint stored on the developer's Mac.
-The service boundaries must allow a later licensed production forecast backend
-without changing the frontend or public API.
+Build a responsive web application where a user searches for an Indian
+common stock listed on NSE or BSE by company name or ticker, reviews its recent
+daily market history, and requests a time-series forecast. A Python backend
+retrieves and validates market data, runs TimesFM, calculates trend indicators,
+and returns a structured analysis to a React frontend. The initial
+implementation is a local development prototype that runs TimesFM from a
+checkpoint stored on the developer's Mac. The service boundaries must allow a
+later licensed production forecast backend without changing the frontend or
+public API.
 
 The product must communicate uncertainty clearly. Forecasts are informational
 estimates, not guaranteed outcomes or investment advice.
@@ -64,7 +65,8 @@ short- or medium-term trend and understands that model output is uncertain.
 ### 4.2 Primary journey
 
 1. The user opens the application and sees a focused search experience.
-2. The user types a company name or ticker, such as `Apple` or `AAPL`.
+2. The user types a company name or ticker, such as `Reliance` or
+   `RELIANCE.NS`.
 3. After at least two characters, the UI displays matching securities with
    company name, ticker, exchange, region, and currency.
 4. The user selects exactly one result.
@@ -88,8 +90,8 @@ the provider returns one unique active listing.
 - `FR-SEARCH-02`: Search is debounced by 300 ms and starts at two characters.
 - `FR-SEARCH-03`: Results show name, ticker, exchange, region, currency, and
   instrument type.
-- `FR-SEARCH-04`: Only active common-stock listings supported by the configured
-  data provider are forecastable in the MVP.
+- `FR-SEARCH-04`: Only active Indian common-stock listings on NSE or BSE that
+  are supported by the configured data provider are forecastable in the MVP.
 - `FR-SEARCH-05`: The frontend stores and submits the provider's canonical
   symbol, not the user's raw query.
 - `FR-SEARCH-06`: Empty input, no matches, ambiguous matches, unsupported
@@ -375,6 +377,11 @@ the intended local evaluation and supports both symbol search and adjusted
 daily history. Alpha Vantage is acceptable for the MVP, subject to its current
 quotas and terms.
 
+The Yahoo Finance development adapter accepts only NSE (`.NS`) and BSE (`.BO`)
+equities, preserves the provider's canonical suffixed symbol, and normalizes
+prices to INR metadata. Forecast dates use the supported Indian exchange
+calendar and must exclude Indian exchange holidays.
+
 Provider requirements:
 
 - Explicit connect/read/total timeouts.
@@ -431,8 +438,9 @@ TimesFM is a local backend dependency for the MVP:
    `~/.cache/timesfm/google-timesfm-3.0-pytorch/`, and configure its absolute
    path with `TIMESFM_CHECKPOINT_PATH`.
 5. Validate the directory and required model files during backend startup.
-   Missing or incomplete files must produce a clear startup error with setup
-   instructions.
+   Missing or incomplete files must produce a clear operational log message,
+   keep readiness false, and make forecasts return `MODEL_NOT_READY`. Search
+   and historical-data endpoints may remain available.
 6. Do not download model files automatically while starting the API or serving
    a forecast request. After setup, TimesFM inference must use only local model
    files.
@@ -526,11 +534,11 @@ Success, `200`:
 {
   "results": [
     {
-      "symbol": "AAPL",
-      "name": "Apple Inc.",
-      "exchange": "NASDAQ",
-      "region": "United States",
-      "currency": "USD",
+      "symbol": "RELIANCE.NS",
+      "name": "Reliance Industries Limited",
+      "exchange": "NSE",
+      "region": "India",
+      "currency": "INR",
       "instrument_type": "common_stock"
     }
   ]
@@ -549,16 +557,16 @@ Success, `200`:
 ```json
 {
   "security": {
-    "symbol": "AAPL",
-    "name": "Apple Inc.",
-    "exchange": "NASDAQ",
-    "currency": "USD",
-    "timezone": "America/New_York"
+    "symbol": "RELIANCE.NS",
+    "name": "Reliance Industries Limited",
+    "exchange": "NSE",
+    "currency": "INR",
+    "timezone": "Asia/Kolkata"
   },
   "prices": [
     {
       "date": "2026-10-16",
-      "adjusted_close": 247.31
+      "adjusted_close": 1210.50
     }
   ],
   "metadata": {
@@ -578,7 +586,7 @@ Request:
 
 ```json
 {
-  "symbol": "AAPL",
+  "symbol": "RELIANCE.NS",
   "horizon": 20
 }
 ```
@@ -589,34 +597,34 @@ Success, `200`:
 {
   "forecast_id": "fc_01J...",
   "security": {
-    "symbol": "AAPL",
-    "name": "Apple Inc.",
-    "exchange": "NASDAQ",
-    "currency": "USD",
-    "timezone": "America/New_York"
+    "symbol": "RELIANCE.NS",
+    "name": "Reliance Industries Limited",
+    "exchange": "NSE",
+    "currency": "INR",
+    "timezone": "Asia/Kolkata"
   },
   "history": [
     {
       "date": "2026-10-16",
-      "adjusted_close": 247.31
+      "adjusted_close": 1210.50
     }
   ],
   "forecast": [
     {
       "date": "2026-10-19",
-      "p10": 241.12,
-      "p50": 248.46,
-      "p90": 255.87
+      "p10": 1180.12,
+      "p50": 1216.46,
+      "p90": 1255.87
     }
   ],
   "analysis": {
-    "latest_close": 247.31,
-    "forecast_end": 255.72,
+    "latest_close": 1210.50,
+    "forecast_end": 1251.66,
     "forecast_change_percent": 3.4,
     "historical_change_5d_percent": 1.2,
     "historical_change_20d_percent": -0.8,
-    "sma_20": 244.18,
-    "sma_50": 238.64,
+    "sma_20": 1195.18,
+    "sma_50": 1172.64,
     "trend": "upward",
     "final_interval_width_percent": 12.1,
     "summary": "TimesFM's median forecast is 3.4% above the latest adjusted close over the next 20 trading sessions. The p10-p90 interval widens toward the end of the horizon, indicating increasing uncertainty."
@@ -654,7 +662,7 @@ All API errors use:
 {
   "error": {
     "code": "INSUFFICIENT_HISTORY",
-    "message": "AAPL does not have enough valid daily history for a forecast.",
+    "message": "RELIANCE.NS does not have enough valid daily history for a forecast.",
     "retryable": false,
     "request_id": "req_01J...",
     "details": {
@@ -831,8 +839,9 @@ required value is absent or inconsistent with local development mode.
 
 The MVP is complete only when:
 
-1. A user can search by `Apple` or `AAPL`, select the intended listing, and see
-   current security metadata and historical adjusted-close data.
+1. A user can search by `Reliance` or `RELIANCE.NS`, select the intended NSE or
+   BSE listing, and see current security metadata and historical adjusted-close
+   data in INR.
 2. The user can generate 5-, 20-, and 60-session forecasts from TimesFM.
 3. Each result contains exactly the requested number of valid future trading
    dates and ordered p10/p50/p90 values.

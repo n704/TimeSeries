@@ -905,6 +905,19 @@ wheels = [
 ]
 
 [[package]]
+name = "pandas-market-calendars"
+version = "5.5.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "exchange-calendars" },
+    { name = "pandas" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/23/c3/66932222d7ea10f49a1c1dc5bfed1c42addf0283e6bd31445c59ca4eb655/pandas_market_calendars-5.5.0.tar.gz", hash = "sha256:3b586618e87b747e937636d0e1e4bf9e14f67e5996fa3170243e96278cb6e29d", size = 185923, upload-time = "2026-10-05T00:55:24.069Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e4/e0/25f5c0cf8852681ec8a44c7678897e39cc219f4d8a7150fedf38a648e067/pandas_market_calendars-5.5.0-py3-none-any.whl", hash = "sha256:ddca6fb04b07b47bf026c33629e852d3c554caeb148cd0cfb1588ce25881e10d", size = 141132, upload-time = "2026-10-05T00:55:21.949Z" },
+]
+
+[[package]]
 name = "pluggy"
 version = "1.7.0"
 source = { registry = "https://pypi.org/simple" }
@@ -1193,11 +1206,11 @@ name = "timeseries-stock-api"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
-    { name = "exchange-calendars" },
     { name = "fastapi" },
     { name = "httpx" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.4", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
+    { name = "pandas-market-calendars" },
     { name = "pydantic-settings" },
     { name = "uvicorn", extra = ["standard"] },
 ]
@@ -1216,10 +1229,10 @@ timesfm-pytorch = [
 
 [package.metadata]
 requires-dist = [
-    { name = "exchange-calendars", specifier = ">=4.11,<5" },
     { name = "fastapi", specifier = ">=0.116,<1" },
     { name = "httpx", specifier = ">=0.28,<1" },
     { name = "numpy", specifier = ">=1.26,<3" },
+    { name = "pandas-market-calendars", specifier = ">=5.5,<6" },
     { name = "pydantic-settings", specifier = ">=2.10,<3" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.4,<9" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=6.2,<7" },

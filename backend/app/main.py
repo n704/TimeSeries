@@ -71,8 +71,15 @@ def create_app(
     application.state.trading_calendar = trading_calendar or TradingCalendar()
     application.state.model_ready = False
     try:
-      await model.load()
-      application.state.model_ready = True
+      try:
+        await model.load()
+      except RuntimeError:
+        logger.warning(
+            "Forecast model is unavailable; readiness remains false. "
+            "Check the local TimesFM installation and checkpoint configuration."
+        )
+      else:
+        application.state.model_ready = True
       yield
     finally:
       application.state.model_ready = False

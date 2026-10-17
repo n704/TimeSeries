@@ -4,7 +4,7 @@ A Mac-first stock trend forecasting application with:
 
 - a Python 3.11 and FastAPI backend;
 - a React and TypeScript frontend;
-- daily U.S. common-stock data from Yahoo Finance;
+- daily Indian common-stock data from Yahoo Finance;
 - an on-disk Google Research TimesFM 3.0 checkpoint;
 - historical and forecast charts with p10-p90 uncertainty ranges.
 
@@ -106,8 +106,9 @@ TIMESFM_DEVICE=cpu
 ```
 
 The backend validates the directory and loads TimesFM before reporting itself
-ready. A missing or incomplete checkpoint produces a startup error rather than
-silently using another prediction method.
+ready. With a missing or incomplete checkpoint, the API remains live for stock
+search and history, but readiness returns `503` and forecast requests return
+`MODEL_NOT_READY`. The backend never substitutes another prediction method.
 
 ## 4. Verify the backend
 
@@ -177,8 +178,8 @@ The readiness endpoint returns `503` until TimesFM has loaded.
 
 | Method | Endpoint | Purpose |
 | --- | --- | --- |
-| `GET` | `/api/v1/securities/search?q=Apple` | Search supported U.S. stocks |
-| `GET` | `/api/v1/securities/AAPL/history?range=1y` | Load adjusted-close history |
+| `GET` | `/api/v1/securities/search?q=Reliance` | Search supported Indian stocks |
+| `GET` | `/api/v1/securities/RELIANCE.NS/history?range=1y` | Load adjusted-close history |
 | `POST` | `/api/v1/forecasts` | Generate a 5-, 20-, or 60-session forecast |
 | `GET` | `/health/live` | Check the API process |
 | `GET` | `/health/ready` | Check whether TimesFM is loaded |
@@ -188,14 +189,15 @@ Example forecast request:
 ```bash
 curl -X POST http://localhost:8000/api/v1/forecasts \
   -H 'Content-Type: application/json' \
-  -d '{"symbol":"AAPL","horizon":20}'
+  -d '{"symbol":"RELIANCE.NS","horizon":20}'
 ```
 
 ## Market-data scope
 
-The initial Yahoo Finance adapter accepts active U.S. common stocks listed on
-NASDAQ, NYSE, NYSE American, or NYSE Arca. It uses daily adjusted close and does
-not fill weekends or exchange holidays.
+The initial Yahoo Finance adapter accepts active Indian common stocks listed on
+NSE or BSE. Yahoo's canonical symbols include the exchange suffix, such as
+`RELIANCE.NS` or `RELIANCE.BO`. The adapter uses daily adjusted close in INR and
+does not fill weekends or Indian exchange holidays.
 
 Yahoo Finance is an external service. Review its current terms before use. A
 future licensed provider can replace the adapter without changing the frontend

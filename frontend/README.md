@@ -1,7 +1,7 @@
 # Frontend
 
-Responsive React interface for stock search, historical price exploration, and
-TimesFM forecasts with uncertainty.
+Responsive React interface for Indian stock search, historical price
+exploration, and TimesFM forecasts with uncertainty.
 
 ## Technology
 
@@ -47,7 +47,7 @@ market-data credentials, model credentials, or checkpoint paths.
 
 ## User flow
 
-1. Enter at least two characters of a company name or ticker.
+1. Enter at least two characters of an Indian company name or NSE/BSE ticker.
 2. Search starts after a 300 ms debounce.
 3. Select one supported security.
 4. Load and display adjusted-close history.

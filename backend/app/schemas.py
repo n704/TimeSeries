@@ -13,7 +13,7 @@ class Security(BaseModel):
   symbol: str
   name: str
   exchange: str
-  region: str = "United States"
+  region: str = "India"
   currency: str
   instrument_type: InstrumentType = InstrumentType.COMMON_STOCK
   timezone: str | None = None
@@ -42,7 +42,7 @@ class SearchResponse(BaseModel):
 
 
 class ForecastRequest(BaseModel):
-  symbol: str = Field(min_length=1, max_length=20, pattern=r"^[A-Za-z0-9.\-^]+$")
+  symbol: str = Field(min_length=1, max_length=20, pattern=r"^[A-Za-z0-9.&\-^]+$")
   horizon: Literal[5, 20, 60]
 
 

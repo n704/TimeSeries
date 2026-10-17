@@ -79,6 +79,13 @@ async def create_forecast(
     body: ForecastRequest,
     request: Request,
 ) -> ForecastResponse:
+  if not request.app.state.model_ready:
+    raise AppError(
+        "MODEL_NOT_READY",
+        "TimesFM is not loaded. Check the backend model configuration.",
+        status_code=503,
+        retryable=True,
+    )
   history = await _provider(request).history(body.symbol.upper(), "5y")
   minimum = request.app.state.settings.min_history_observations
   if len(history.prices) < minimum:
@@ -98,6 +105,7 @@ async def create_forecast(
   )
   output = await _model(request).predict(context, body.horizon)
   forecast_dates = _calendar(request).next_sessions(
+      history.security.exchange,
       history.prices[-1].date,
       body.horizon,
   )
