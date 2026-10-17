@@ -18,10 +18,20 @@ recommendations.
 ## Repository structure
 
 ```text
-backend/    FastAPI API, market-data adapter, TimesFM adapter, and tests
-frontend/   Vite React application, chart components, and tests
-spec.md     Product and technical specification
+backend/       FastAPI API, market-data adapter, TimesFM adapter, and tests
+frontend/      Vite React application, chart components, and tests
+AGENTS.md      Repository guide for AI coding agents
+DEPLOYMENT.md  Local runtime and future production deployment guide
+spec.md        Product and technical specification
 ```
+
+## Documentation
+
+- [AI agent guide](./AGENTS.md)
+- [Backend guide](./backend/README.md)
+- [Frontend guide](./frontend/README.md)
+- [Deployment guide](./DEPLOYMENT.md)
+- [Product and technical specification](./spec.md)
 
 ## Prerequisites
 
