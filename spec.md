@@ -109,7 +109,8 @@ the provider returns one unique active listing.
 - `FR-DATA-05`: Do not invent observations for weekends, exchange holidays, or
   missing source data.
 - `FR-DATA-06`: Require at least 120 valid daily observations. Return a
-  structured `INSUFFICIENT_HISTORY` error otherwise.
+  structured `INSUFFICIENT_HISTORY` error otherwise. The UI must show the
+  available observation count and the minimum required observation count.
 - `FR-DATA-07`: Display the provider name, price currency, exchange timezone,
   last market date, and data retrieval time.
 
