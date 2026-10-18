@@ -107,16 +107,16 @@ export function PriceChart({
         >
           <defs>
             <linearGradient id="uncertainty" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="5%" stopColor="#6f8cff" stopOpacity={0.28} />
-              <stop offset="95%" stopColor="#6f8cff" stopOpacity={0.03} />
+              <stop offset="5%" stopColor="#16a36f" stopOpacity={0.26} />
+              <stop offset="95%" stopColor="#16a36f" stopOpacity={0.03} />
             </linearGradient>
           </defs>
-          <CartesianGrid stroke="#26324c" strokeDasharray="3 6" vertical={false} />
+          <CartesianGrid stroke="#dce9e1" strokeDasharray="3 6" vertical={false} />
           <XAxis
             dataKey="date"
             tickFormatter={dateLabel}
             minTickGap={34}
-            stroke="#8490a8"
+            stroke="#6f8379"
             tickLine={false}
             axisLine={false}
           />
@@ -124,7 +124,7 @@ export function PriceChart({
             domain={["auto", "auto"]}
             tickFormatter={(value: number) => formatter.format(value)}
             width={80}
-            stroke="#8490a8"
+            stroke="#6f8379"
             tickLine={false}
             axisLine={false}
           />
@@ -137,10 +137,13 @@ export function PriceChart({
               return [formatter.format(Number(value)), name];
             }}
             contentStyle={{
-              background: "#111a2d",
-              border: "1px solid #33415f",
+              background: "#082f25",
+              border: "1px solid #27614e",
               borderRadius: "12px",
+              color: "#f3fff7",
             }}
+            itemStyle={{ color: "#f3fff7" }}
+            labelStyle={{ color: "#d2e7da" }}
           />
           <Legend />
           {forecast.length > 0 && (
@@ -156,7 +159,7 @@ export function PriceChart({
             type="monotone"
             dataKey="historical"
             name="Adjusted close"
-            stroke="#f0f3f9"
+            stroke="#24483b"
             strokeWidth={2.2}
             dot={false}
             activeDot={{ r: 4 }}
@@ -167,7 +170,7 @@ export function PriceChart({
                 type="monotone"
                 dataKey="sma20"
                 name="20-session average"
-                stroke="#f7b267"
+                stroke="#bd7d2a"
                 strokeWidth={1.5}
                 strokeDasharray="5 5"
                 dot={false}
@@ -176,7 +179,7 @@ export function PriceChart({
                 type="monotone"
                 dataKey="sma50"
                 name="50-session average"
-                stroke="#54d2b0"
+                stroke="#58a66e"
                 strokeWidth={1.5}
                 strokeDasharray="2 5"
                 dot={false}
@@ -188,7 +191,7 @@ export function PriceChart({
               type="monotone"
               dataKey="forecast"
               name="TimesFM median"
-              stroke="#6f8cff"
+              stroke="#0b8f60"
               strokeWidth={3}
               dot={false}
               activeDot={{ r: 4 }}
@@ -198,9 +201,9 @@ export function PriceChart({
           {dividerDate && (
             <ReferenceLine
               x={dividerDate}
-              stroke="#7f8ba4"
+              stroke="#799086"
               strokeDasharray="4 4"
-              label={{ value: "Forecast", fill: "#aeb8cc", position: "insideTopRight" }}
+              label={{ value: "Forecast", fill: "#526c61", position: "insideTopRight" }}
             />
           )}
         </ComposedChart>

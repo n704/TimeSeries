@@ -31,11 +31,13 @@ common-stock forecasts. The application:
 - back-checks a seven-session holdout against known adjusted closes;
 - displays p10, p50, and p90 output from TimesFM;
 - visualizes historical prices, moving averages, median predictions, and an
-  uncertainty band.
+  uncertainty band;
+- stores an optional watchlist and paper portfolio in the local SQLite
+  tracking database.
 
-Do not add intraday, options, cryptocurrency, trade execution, portfolio, or
-recommendation behavior unless the product specification is intentionally
-changed.
+Do not add intraday, options, cryptocurrency, brokerage connectivity, trade
+execution, synced portfolio data, or recommendation behavior unless the product
+specification is intentionally changed.
 
 ## Architecture
 
@@ -93,6 +95,13 @@ frontend/src/styles.css   Responsive visual system
 11. Abort or ignore stale browser requests when the selected symbol changes.
 12. Keep provider secrets and credentials out of the frontend and logs.
 13. A back-check must exclude all seven holdout observations from model context.
+14. Watchlist and paper portfolio data remain in the configured local SQLite
+    database and must never imply brokerage synchronization, live quotes, or
+    executable positions.
+15. Portfolio outlooks may expose the 7th, 20th, or 60th point of a valid
+    TimesFM forecast and must retain each point's p10-p90 uncertainty range.
+16. Missing portfolio outlooks must use the existing forecast API with visible
+    progress and errors; never synthesize projected values.
 
 ## Local commands
 

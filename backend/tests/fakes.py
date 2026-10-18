@@ -3,7 +3,13 @@ from datetime import UTC, date, datetime, timedelta
 import numpy as np
 
 from app.providers.base import HistoryData
-from app.schemas import HistoryMetadata, PricePoint, Security
+from app.schemas import (
+    HistoryMetadata,
+    PricePoint,
+    Security,
+    TrackingState,
+    TrackingStateResponse,
+)
 from app.services.forecast import ModelForecast
 
 
@@ -87,3 +93,23 @@ class FakeTradingCalendar:
   def next_sessions(self, exchange: str, after: date, count: int) -> list[date]:
     assert exchange == "NSE"
     return [after + timedelta(days=index + 1) for index in range(count)]
+
+
+class FakeTrackingStore:
+  def __init__(self) -> None:
+    self.state = TrackingStateResponse()
+    self.initialized = False
+
+  async def initialize(self) -> None:
+    self.initialized = True
+
+  async def load(self) -> TrackingStateResponse:
+    return self.state
+
+  async def save(self, state: TrackingState) -> TrackingStateResponse:
+    self.state = TrackingStateResponse(
+        watchlist=state.watchlist,
+        positions=state.positions,
+        updated_at=datetime(2026, 10, 18, tzinfo=UTC),
+    )
+    return self.state

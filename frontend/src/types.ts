@@ -138,6 +138,45 @@ export interface BacktestResponse {
   disclaimer: string;
 }
 
+export interface PortfolioOutlook {
+  date: string;
+  p10: number;
+  p50: number;
+  p90: number;
+  generatedAt: string;
+}
+
+export type PortfolioOutlookHorizon = 7 | 20 | 60;
+export type PortfolioOutlooks = Partial<
+  Record<PortfolioOutlookHorizon, PortfolioOutlook>
+>;
+
+export interface WatchlistItem {
+  security: Security;
+  latestClose: number;
+  lastMarketDate: string;
+  addedAt: string;
+}
+
+export interface PortfolioPosition {
+  security: Security;
+  quantity: number;
+  averagePrice: number;
+  latestClose: number;
+  lastMarketDate: string;
+  outlooks?: PortfolioOutlooks;
+  updatedAt: string;
+}
+
+export interface TrackingState {
+  watchlist: WatchlistItem[];
+  positions: PortfolioPosition[];
+}
+
+export interface TrackingStateResponse extends TrackingState {
+  updatedAt: string | null;
+}
+
 export interface ApiErrorPayload {
   error: {
     code: string;

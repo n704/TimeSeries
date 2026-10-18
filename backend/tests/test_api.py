@@ -5,6 +5,7 @@ from app.main import create_app
 from tests.fakes import (
     FakeForecastModel,
     FakeMarketDataProvider,
+    FakeTrackingStore,
     FakeTradingCalendar,
 )
 
@@ -15,6 +16,7 @@ def make_client(history_count: int = 150) -> TestClient:
       market_data_provider=FakeMarketDataProvider(history_count),
       forecast_model=FakeForecastModel(),
       trading_calendar=FakeTradingCalendar(),
+      tracking_store=FakeTrackingStore(),
   )
   return TestClient(app)
 
@@ -40,6 +42,102 @@ def test_search_and_history_contracts() -> None:
   assert history.status_code == 200
   assert len(history.json()["prices"]) == 150
   assert history.json()["metadata"]["provider"] == "Fixture"
+
+
+def test_tracking_state_persists_through_api() -> None:
+  payload = {
+      "watchlist": [
+          {
+              "security": {
+                  "symbol": "RELIANCE.NS",
+                  "name": "Reliance Industries Limited",
+                  "exchange": "NSE",
+                  "region": "India",
+                  "currency": "INR",
+                  "instrument_type": "common_stock",
+                  "timezone": "Asia/Kolkata",
+              },
+              "latest_close": 1211.2,
+              "last_market_date": "2026-10-16",
+              "added_at": "2026-10-18T00:00:00Z",
+          }
+      ],
+      "positions": [
+          {
+              "security": {
+                  "symbol": "RELIANCE.NS",
+                  "name": "Reliance Industries Limited",
+                  "exchange": "NSE",
+                  "region": "India",
+                  "currency": "INR",
+                  "instrument_type": "common_stock",
+                  "timezone": "Asia/Kolkata",
+              },
+              "quantity": 3,
+              "average_price": 1000,
+              "latest_close": 1211.2,
+              "last_market_date": "2026-10-16",
+              "outlooks": {
+                  "20": {
+                      "date": "2026-11-16",
+                      "p10": 1180,
+                      "p50": 1250,
+                      "p90": 1320,
+                      "generated_at": "2026-10-18T00:00:00Z",
+                  }
+              },
+              "updated_at": "2026-10-18T00:00:00Z",
+          }
+      ],
+  }
+
+  with make_client() as client:
+    saved = client.put("/api/v1/tracking", json=payload)
+    loaded = client.get("/api/v1/tracking")
+
+  assert saved.status_code == 200
+  assert saved.json()["updated_at"] == "2026-10-18T00:00:00Z"
+  assert loaded.status_code == 200
+  assert loaded.json()["watchlist"] == payload["watchlist"]
+  assert loaded.json()["positions"] == payload["positions"]
+
+
+def test_tracking_state_rejects_invalid_quantiles() -> None:
+  payload = {
+      "watchlist": [],
+      "positions": [
+          {
+              "security": {
+                  "symbol": "RELIANCE.NS",
+                  "name": "Reliance Industries Limited",
+                  "exchange": "NSE",
+                  "region": "India",
+                  "currency": "INR",
+                  "instrument_type": "common_stock",
+              },
+              "quantity": 3,
+              "average_price": 1000,
+              "latest_close": 1211.2,
+              "last_market_date": "2026-10-16",
+              "outlooks": {
+                  "20": {
+                      "date": "2026-11-16",
+                      "p10": 1300,
+                      "p50": 1250,
+                      "p90": 1200,
+                      "generated_at": "2026-10-18T00:00:00Z",
+                  }
+              },
+              "updated_at": "2026-10-18T00:00:00Z",
+          }
+      ],
+  }
+
+  with make_client() as client:
+    response = client.put("/api/v1/tracking", json=payload)
+
+  assert response.status_code == 422
+  assert response.json()["error"]["code"] == "INVALID_REQUEST"
 
 
 def test_forecast_contract_contains_chart_data_and_analysis() -> None:
@@ -181,6 +279,7 @@ def test_api_stays_live_and_provider_closes_when_model_startup_fails() -> None:
       market_data_provider=provider,
       forecast_model=FailingModel(),
       trading_calendar=FakeTradingCalendar(),
+      tracking_store=FakeTrackingStore(),
   )
 
   with TestClient(app) as client:

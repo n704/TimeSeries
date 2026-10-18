@@ -2,7 +2,7 @@
 
 **Status:** Draft for implementation
 
-**Last updated:** 2026-10-17
+**Last updated:** 2026-10-18
 
 **Product type:** Python API and React single-page application
 
@@ -42,13 +42,15 @@ estimates, not guaranteed outcomes or investment advice.
    infrastructure changes do not require frontend changes.
 9. Run the complete development application on macOS with TimesFM installed and
    its checkpoint available locally.
+10. Let users save a watchlist and paper portfolio in the local application
+    database without creating an account or connecting to a brokerage.
 
 ## 3. Non-goals for the MVP
 
 - The MVP supports end-of-day common-stock analysis only. Intraday analysis,
   options analysis, and cryptocurrency analysis are explicitly out of scope.
 - Executing trades or connecting to brokerage accounts.
-- Portfolio tracking, alerts, watchlists, or user accounts.
+- Synced portfolio data, alerts, user accounts, or brokerage integrations.
 - Forex or commodity forecasting.
 - News, social sentiment, or fundamental analysis.
 - Fine-tuning TimesFM on an individual security.
@@ -263,6 +265,7 @@ The MVP is a single-page application with these regions:
    - Default NIFTY 50 research entry with a constituent dropdown and prediction
      button.
    - Stock explorer entry for provider-backed security search.
+   - Saved watchlist and paper portfolio entry.
 3. **Search panel**
    - Accessible combobox for security search.
    - Recent examples as non-binding suggestions on the empty state.
@@ -281,7 +284,18 @@ The MVP is a single-page application with these regions:
    - Interactive historical price chart, enhanced with forecast and uncertainty
      visualizations after prediction.
    - Expandable methodology and metadata.
-7. **Footer**
+7. **Saved tracking**
+   - Add or remove the selected security from a watchlist.
+   - Add, update, or remove a paper position with quantity and average price.
+   - Show cost basis, snapshot market value, and unrealized change.
+   - Let users select a 7-, 20-, or 60-session portfolio outlook. Show the
+     selected future session's p50 price and p10-p90 range when that forecast
+     point has been generated.
+   - Automatically generate missing 20-session forecasts for the 7- and
+     20-session portfolio views, and missing 60-session forecasts for the
+     60-session view. Show progress and per-symbol failures.
+   - Persist tracking state in the backend's local SQLite database.
+8. **Footer**
    - Data attribution, model attribution, and financial disclaimer.
 
 ### 6.3 Charts
@@ -788,13 +802,25 @@ end, end date, p10, p50, p90, interval width, and data freshness.
 This endpoint is a neutral research screen. It does not produce a buy, sell, or
 hold recommendation.
 
-### 10.6 Health endpoints
+### 10.6 Saved tracking state
+
+- `GET /api/v1/tracking` returns the saved watchlist, paper positions, forecast
+  outlook maps, and database update timestamp.
+- `PUT /api/v1/tracking` validates and atomically replaces the complete
+  single-user tracking state.
+
+The API permits at most 20 unique watchlist symbols and 20 unique position
+symbols. Quantities, prices, and forecast quantiles must be finite and positive;
+every outlook must satisfy `p10 <= p50 <= p90`. Supported outlook keys are
+exactly `7`, `20`, and `60`.
+
+### 10.7 Health endpoints
 
 - `GET /health/live`: process is running; does not contact external services.
 - `GET /health/ready`: model is loaded and required internal dependencies are
   available. It must not repeatedly call the market-data provider.
 
-### 10.7 Error format
+### 10.8 Error format
 
 All API errors use:
 
@@ -826,6 +852,7 @@ Expected codes:
 | 503 | `DATA_PROVIDER_RATE_LIMITED` | Yes |
 | 503 | `MODEL_NOT_READY` | Yes |
 | 503 | `MODEL_BUSY` | Yes |
+| 503 | `TRACKING_STORAGE_ERROR` | Yes |
 | 500 | `MODEL_OUTPUT_INVALID` | Yes |
 | 504 | `FORECAST_TIMEOUT` | Yes |
 
@@ -856,7 +883,9 @@ load:
   gitignored, and never expose them in browser bundles.
 - Redact provider keys, authorization headers, and full exception payloads from
   logs.
-- The MVP stores no user profile or portfolio data.
+- The MVP stores no user profile. Watchlist and paper portfolio data are stored
+  in a single-user local SQLite database and are not synchronized to an account
+  or brokerage.
 - Do not log credentials or complete upstream response payloads.
 
 ## 13. Development diagnostics

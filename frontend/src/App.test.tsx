@@ -8,11 +8,14 @@ import {
 
 import App from "./App";
 import { ApiError } from "./api/client";
+import type { TrackingState } from "./types";
 
 const apiMocks = vi.hoisted(() => ({
   createBacktest: vi.fn(),
   createForecast: vi.fn(),
   getHistory: vi.fn(),
+  getTrackingState: vi.fn(),
+  saveTrackingState: vi.fn(),
   screenIndex: vi.fn(),
   searchSecurities: vi.fn(),
 }));
@@ -142,8 +145,20 @@ const indexScreenResponse = {
 describe("App", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    window.localStorage.clear();
     apiMocks.getHistory.mockResolvedValue(historyResponse);
     apiMocks.createForecast.mockResolvedValue(forecastResponse);
+    apiMocks.getTrackingState.mockResolvedValue({
+      watchlist: [],
+      positions: [],
+      updatedAt: null,
+    });
+    apiMocks.saveTrackingState.mockImplementation(
+      async (state: TrackingState) => ({
+        ...state,
+        updatedAt: "2026-10-18T00:00:00Z",
+      }),
+    );
     apiMocks.screenIndex.mockResolvedValue(indexScreenResponse);
   });
 
@@ -427,5 +442,229 @@ describe("App", () => {
       }),
     ).toBeInTheDocument();
     await waitFor(() => expect(heading).toHaveFocus());
+  });
+
+  it("saves the selected stock to a local watchlist", async () => {
+    render(<App />);
+
+    const watchlistButton = await screen.findByRole("button", {
+      name: /add to watchlist/i,
+    });
+    fireEvent.click(watchlistButton);
+    fireEvent.click(
+      screen.getByRole("tab", { name: /watchlist & portfolio/i }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /stocks to revisit/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("RELIANCE.NS · NSE")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /open research/i })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.saveTrackingState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          watchlist: [
+            expect.objectContaining({
+              security: expect.objectContaining({ symbol: "RELIANCE.NS" }),
+            }),
+          ],
+        }),
+      ),
+    );
+  });
+
+  it("adds a paper portfolio position and calculates its value", async () => {
+    render(<App />);
+
+    await screen.findByRole("heading", { name: /timesfm forecast/i });
+    fireEvent.click(
+      await screen.findByRole("button", { name: /add holding/i }),
+    );
+    fireEvent.change(screen.getByRole("spinbutton", { name: /quantity/i }), {
+      target: { value: "2" },
+    });
+    fireEvent.change(
+      screen.getByRole("spinbutton", { name: /average price/i }),
+      { target: { value: "1000" } },
+    );
+    fireEvent.click(screen.getByRole("button", { name: /save holding/i }));
+    fireEvent.click(
+      screen.getByRole("tab", { name: /watchlist & portfolio/i }),
+    );
+
+    expect(
+      screen.getByRole("heading", { name: /position overview/i }),
+    ).toBeInTheDocument();
+    const portfolioTable = screen.getByRole("table", {
+      name: /locally saved paper portfolio positions/i,
+    });
+    expect(portfolioTable).toBeInTheDocument();
+    expect(within(portfolioTable).getByText(/2,422\.40/)).toBeInTheDocument();
+    expect(within(portfolioTable).getByText(/1,232\.00/)).toBeInTheDocument();
+    expect(within(portfolioTable).getByText(/2,464\.00/)).toBeInTheDocument();
+    expect(within(portfolioTable).getByText(/2026-11-07/)).toBeInTheDocument();
+    fireEvent.change(
+      screen.getByRole("combobox", { name: /portfolio forecast horizon/i }),
+      { target: { value: "20" } },
+    );
+    expect(within(portfolioTable).getByText(/1,258\.00/)).toBeInTheDocument();
+    expect(within(portfolioTable).getByText(/2,516\.00/)).toBeInTheDocument();
+    apiMocks.createForecast.mockResolvedValue({
+      ...forecastResponse,
+      forecast: Array.from({ length: 60 }, (_, index) => ({
+        date: `2027-01-${String(index + 1).padStart(2, "0")}`,
+        p10: 1190 + index,
+        p50: 1220 + index * 2,
+        p90: 1260 + index * 3,
+      })),
+      metadata: {
+        ...forecastResponse.metadata,
+        horizon_trading_days: 60,
+      },
+    });
+    fireEvent.change(
+      screen.getByRole("combobox", { name: /portfolio forecast horizon/i }),
+      { target: { value: "60" } },
+    );
+    await waitFor(() =>
+      expect(apiMocks.createForecast).toHaveBeenLastCalledWith(
+        "RELIANCE.NS",
+        60,
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(
+      await within(portfolioTable).findByText(/1,338\.00/),
+    ).toBeInTheDocument();
+    expect(within(portfolioTable).getByText(/2,676\.00/)).toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.saveTrackingState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          positions: [
+            expect.objectContaining({
+              quantity: 2,
+              outlooks: expect.objectContaining({
+                7: expect.objectContaining({ p50: 1232 }),
+                20: expect.objectContaining({ p50: 1258 }),
+                60: expect.objectContaining({ p50: 1338 }),
+              }),
+            }),
+          ],
+        }),
+      ),
+    );
+  });
+
+  it("automatically forecasts portfolio positions missing the selected horizon", async () => {
+    const trackedSecurity = {
+      ...security,
+      symbol: "FEDFINA.NS",
+      name: "Fedbank Financial Services Limited",
+    };
+    window.localStorage.setItem(
+      "timeseries.tracking.v1",
+      JSON.stringify({
+        watchlist: [],
+        positions: [
+          {
+            security: trackedSecurity,
+            quantity: 5,
+            averagePrice: 1000,
+            latestClose: 1211.2,
+            lastMarketDate: "2026-10-16",
+            updatedAt: "2026-10-18T00:00:00Z",
+          },
+        ],
+      }),
+    );
+    apiMocks.createForecast.mockImplementation(
+      async (symbol: string) => ({
+        ...forecastResponse,
+        security: {
+          ...security,
+          symbol,
+          name:
+            symbol === trackedSecurity.symbol
+              ? trackedSecurity.name
+              : security.name,
+        },
+      }),
+    );
+
+    render(<App />);
+    fireEvent.click(
+      screen.getByRole("tab", { name: /watchlist & portfolio/i }),
+    );
+
+    await waitFor(() =>
+      expect(apiMocks.createForecast).toHaveBeenCalledWith(
+        "FEDFINA.NS",
+        20,
+        expect.any(AbortSignal),
+      ),
+    );
+    const portfolioTable = screen.getByRole("table", {
+      name: /locally saved paper portfolio positions/i,
+    });
+    expect(
+      await within(portfolioTable).findByText(/1,232\.00/),
+    ).toBeInTheDocument();
+    expect(within(portfolioTable).getByText(/6,160\.00/)).toBeInTheDocument();
+    expect(
+      within(portfolioTable).queryByText(/run a 20-session forecast/i),
+    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(apiMocks.saveTrackingState).toHaveBeenCalledWith(
+        expect.objectContaining({
+          positions: [
+            expect.objectContaining({
+              security: expect.objectContaining({ symbol: "FEDFINA.NS" }),
+            }),
+          ],
+        }),
+      ),
+    );
+    expect(window.localStorage.getItem("timeseries.tracking.v1")).toBeNull();
+  });
+
+  it("loads saved watchlist data from the tracking API", async () => {
+    apiMocks.getTrackingState.mockResolvedValue({
+      watchlist: [
+        {
+          security,
+          latestClose: 1211.2,
+          lastMarketDate: "2026-10-16",
+          addedAt: "2026-10-18T00:00:00Z",
+        },
+      ],
+      positions: [],
+      updatedAt: "2026-10-18T00:00:00Z",
+    });
+
+    render(<App />);
+    fireEvent.click(
+      screen.getByRole("tab", { name: /watchlist & portfolio/i }),
+    );
+
+    expect(await screen.findByText("RELIANCE.NS · NSE")).toBeInTheDocument();
+    expect(apiMocks.getTrackingState).toHaveBeenCalledWith(
+      expect.any(AbortSignal),
+    );
+  });
+
+  it("does not overwrite tracking state when the database cannot be loaded", async () => {
+    apiMocks.getTrackingState.mockRejectedValue(
+      new Error("Tracking API unavailable"),
+    );
+
+    render(<App />);
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      /database tracking data could not be loaded/i,
+    );
+    expect(
+      await screen.findByRole("button", { name: /add to watchlist/i }),
+    ).toBeDisabled();
+    expect(apiMocks.saveTrackingState).not.toHaveBeenCalled();
   });
 });

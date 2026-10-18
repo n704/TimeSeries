@@ -255,11 +255,18 @@ Current settings:
 | `MODEL_LOAD_TIMEOUT_SECONDS` | Model initialization deadline |
 | `FORECAST_TIMEOUT_SECONDS` | Forecast deadline |
 | `REQUEST_TIMEOUT_SECONDS` | Market provider HTTP deadline |
+| `TRACKING_DATABASE_PATH` | Writable SQLite path for watchlist and paper portfolio state |
 
 A managed production adapter will require new settings. Add them to typed
 configuration and secret management, and update `.env.example` with safe
 placeholders only. Add an explicit `production` value to `APP_ENV` as part of
 that work; the current typed configuration intentionally rejects it.
+
+The default local path is `data/tracking.sqlite3` relative to the backend
+working directory. Docker Compose bind-mounts `backend/` at `/app`, so the
+default database remains on the host under `backend/data/`. Production
+deployment requires a durable writable volume, backups, and a migration plan;
+do not place the database inside an immutable image layer.
 
 ## Release procedure
 

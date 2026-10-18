@@ -1,7 +1,8 @@
 # Backend
 
 FastAPI service for security search, adjusted-close history, exchange-aware
-forecast dates, local TimesFM inference, and neutral trend analysis.
+forecast dates, local TimesFM inference, neutral trend analysis, and SQLite
+watchlist/portfolio persistence.
 
 ## Architecture
 
@@ -15,6 +16,7 @@ app/api/routes.py
   |-- MarketDataProvider
   |-- TradingCalendar
   |-- ForecastModel
+  |-- TrackingStore
   `-- AnalysisService
 ```
 
@@ -30,6 +32,7 @@ app/api/routes.py
 | `app/services/calendar.py` | Future NSE and BSE trading sessions |
 | `app/services/forecast.py` | Forecast protocol and local TimesFM adapter |
 | `app/services/analysis.py` | Trend metrics and neutral summary |
+| `app/services/tracking.py` | SQLite watchlist and paper portfolio persistence |
 | `app/api/routes.py` | `/api/v1` endpoints and orchestration |
 
 ## Setup
@@ -89,6 +92,10 @@ A missing model checkpoint does not prevent search and history requests. In
 that state, `/health/ready` returns `503` and forecast requests return the
 structured `MODEL_NOT_READY` error.
 
+Tracking data is stored in `data/tracking.sqlite3` by default. Override the path
+with `TRACKING_DATABASE_PATH`. The database and its WAL files are local runtime
+data and must not be committed.
+
 ## API
 
 ### Search
@@ -113,6 +120,22 @@ Content-Type: application/json
 
 {"symbol":"RELIANCE.NS","horizon":20}
 ```
+
+### Watchlist and paper portfolio
+
+```http
+GET /api/v1/tracking
+```
+
+```http
+PUT /api/v1/tracking
+Content-Type: application/json
+
+{"watchlist":[],"positions":[]}
+```
+
+The update replaces the complete single-user tracking state atomically after
+schema, size, symbol uniqueness, and forecast-quantile validation.
 
 Supported horizons: `5`, `20`, and `60`.
 

@@ -25,6 +25,7 @@ class Settings(BaseSettings):
   forecast_timeout_seconds: float = Field(default=30, gt=0)
   request_timeout_seconds: float = Field(default=15, gt=0)
   min_history_observations: int = Field(default=120, ge=20)
+  tracking_database_path: Path = Path("data/tracking.sqlite3")
 
   @field_validator("allowed_origins", mode="before")
   @classmethod

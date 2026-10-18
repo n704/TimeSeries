@@ -23,12 +23,15 @@ from app.schemas import (
     IndexScreenResponse,
     IndexScreenResult,
     SearchResponse,
+    TrackingState,
+    TrackingStateResponse,
 )
 from app.services.analysis import analyze_forecast
 from app.services.backtest import evaluate_backtest
 from app.services.calendar import TradingCalendar
 from app.services.forecast import ForecastModel
 from app.services.indices import INDEX_UNIVERSES
+from app.services.tracking import TrackingStore, TrackingStoreError
 
 router = APIRouter(prefix="/api/v1")
 DISPLAY_PERIODS = {
@@ -66,6 +69,10 @@ def _calendar(request: Request) -> TradingCalendar:
   return request.app.state.trading_calendar
 
 
+def _tracking_store(request: Request) -> TrackingStore:
+  return request.app.state.tracking_store
+
+
 def _require_model_ready(request: Request) -> None:
   if not request.app.state.model_ready:
     raise AppError(
@@ -90,6 +97,35 @@ async def search_securities(
         status_code=400,
     )
   return SearchResponse(results=await _provider(request).search(query, limit))
+
+
+@router.get("/tracking", response_model=TrackingStateResponse)
+async def get_tracking_state(request: Request) -> TrackingStateResponse:
+  try:
+    return await _tracking_store(request).load()
+  except TrackingStoreError as error:
+    raise AppError(
+        "TRACKING_STORAGE_ERROR",
+        "Saved watchlist and portfolio data could not be loaded.",
+        status_code=503,
+        retryable=True,
+    ) from error
+
+
+@router.put("/tracking", response_model=TrackingStateResponse)
+async def save_tracking_state(
+    body: TrackingState,
+    request: Request,
+) -> TrackingStateResponse:
+  try:
+    return await _tracking_store(request).save(body)
+  except TrackingStoreError as error:
+    raise AppError(
+        "TRACKING_STORAGE_ERROR",
+        "Watchlist and portfolio changes could not be saved.",
+        status_code=503,
+        retryable=True,
+    ) from error
 
 
 @router.get("/securities/{symbol}/history", response_model=HistoryResponse)

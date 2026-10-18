@@ -18,6 +18,7 @@ from app.providers.yahoo import YahooMarketDataProvider
 from app.schemas import ErrorBody, ErrorResponse
 from app.services.calendar import TradingCalendar
 from app.services.forecast import ForecastModel, LocalTimesFMAdapter
+from app.services.tracking import SQLiteTrackingStore, TrackingStore
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ def create_app(
     market_data_provider: MarketDataProvider | None = None,
     forecast_model: ForecastModel | None = None,
     trading_calendar: TradingCalendar | None = None,
+    tracking_store: TrackingStore | None = None,
 ) -> FastAPI:
   configured_settings = settings or get_settings()
 
@@ -69,8 +71,12 @@ def create_app(
     application.state.market_data_provider = provider
     application.state.forecast_model = model
     application.state.trading_calendar = trading_calendar or TradingCalendar()
+    application.state.tracking_store = tracking_store or SQLiteTrackingStore(
+        configured_settings.tracking_database_path
+    )
     application.state.model_ready = False
     try:
+      await application.state.tracking_store.initialize()
       try:
         await model.load()
       except RuntimeError:
@@ -96,7 +102,7 @@ def create_app(
       CORSMiddleware,
       allow_origins=configured_settings.allowed_origins,
       allow_credentials=False,
-      allow_methods=["GET", "POST"],
+      allow_methods=["GET", "POST", "PUT"],
       allow_headers=["Content-Type", "X-Request-ID"],
   )
 

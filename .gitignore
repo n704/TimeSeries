@@ -224,6 +224,9 @@ node_modules/
 frontend/dist/
 *.tsbuildinfo
 
+# Local application data
+backend/data/
+
 # Local model files
 .models/
 models/
