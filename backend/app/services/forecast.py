@@ -24,6 +24,12 @@ class ForecastModel(Protocol):
 
   async def predict(self, context: np.ndarray, horizon: int) -> ModelForecast: ...
 
+  async def predict_batch(
+      self,
+      contexts: list[np.ndarray],
+      horizon: int,
+  ) -> list[ModelForecast]: ...
+
 
 class LocalTimesFMAdapter:
   def __init__(
@@ -115,6 +121,34 @@ class LocalTimesFMAdapter:
             retryable=True,
         ) from error
 
+  async def predict_batch(
+      self,
+      contexts: list[np.ndarray],
+      horizon: int,
+  ) -> list[ModelForecast]:
+    if self._forecaster is None:
+      raise AppError(
+          "MODEL_NOT_READY",
+          "TimesFM is not loaded.",
+          status_code=503,
+          retryable=True,
+      )
+    if not contexts:
+      return []
+    async with self._semaphore:
+      try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(self._predict_batch_sync, contexts, horizon),
+            timeout=self._forecast_timeout,
+        )
+      except TimeoutError as error:
+        raise AppError(
+            "FORECAST_TIMEOUT",
+            "TimesFM did not finish before the local timeout.",
+            status_code=504,
+            retryable=True,
+        ) from error
+
   def _predict_sync(self, context: np.ndarray, horizon: int) -> ModelForecast:
     if self._backend == "mlx":
       output = self._forecaster.predict(  # type: ignore[union-attr]
@@ -132,7 +166,32 @@ class LocalTimesFMAdapter:
           )
       )[0]
 
-    point = np.asarray(output.forecast, dtype=np.float64)
+    return self._normalize_output(output, horizon)
+
+  def _predict_batch_sync(
+      self,
+      contexts: list[np.ndarray],
+      horizon: int,
+  ) -> list[ModelForecast]:
+    outputs = list(
+        self._forecaster.predict_batch(  # type: ignore[union-attr]
+            contexts,
+            horizon=horizon,
+            return_quantiles=True,
+            use_symmetric_averaging=False,
+        )
+    )
+    if len(outputs) != len(contexts):
+      raise AppError(
+          "MODEL_OUTPUT_INVALID",
+          "TimesFM returned an unexpected batch size.",
+          status_code=500,
+          retryable=True,
+      )
+    return [self._normalize_output(output, horizon) for output in outputs]
+
+  def _normalize_output(self, output: object, horizon: int) -> ModelForecast:
+    point = np.asarray(output.forecast, dtype=np.float64)  # type: ignore[attr-defined]
     quantiles = np.asarray(output.quantiles, dtype=np.float64)
     if point.shape != (horizon,) or quantiles.shape != (horizon, 9):
       raise AppError(

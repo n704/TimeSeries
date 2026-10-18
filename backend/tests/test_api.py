@@ -98,6 +98,25 @@ def test_forecast_accepts_canonical_indian_symbol_with_ampersand() -> None:
   assert response.status_code == 200
 
 
+def test_nifty50_screen_returns_top_five_positive_forecasts() -> None:
+  with make_client() as client:
+    response = client.post(
+        "/api/v1/research/nifty50/screen",
+        json={"horizon": 20},
+    )
+
+  assert response.status_code == 200
+  payload = response.json()
+  assert len(payload["results"]) == 5
+  assert [result["rank"] for result in payload["results"]] == [1, 2, 3, 4, 5]
+  assert all(result["forecast_change_percent"] > 0 for result in payload["results"])
+  assert payload["metadata"]["universe_size"] == 50
+  assert payload["metadata"]["analyzed_count"] == 50
+  assert payload["metadata"]["positive_count"] == 50
+  assert payload["metadata"]["unavailable_symbols"] == []
+  assert "not a buy, sell, or hold recommendation" in payload["disclaimer"]
+
+
 def test_backtest_predicts_last_seven_sessions_from_prior_history() -> None:
   with make_client() as client:
     response = client.post(
@@ -160,6 +179,10 @@ def test_api_stays_live_and_provider_closes_when_model_startup_fails() -> None:
         "/api/v1/backtests",
         json={"symbol": "RELIANCE.NS"},
     )
+    screen = client.post(
+        "/api/v1/research/nifty50/screen",
+        json={"horizon": 20},
+    )
 
   assert liveness.status_code == 200
   assert readiness.status_code == 503
@@ -168,5 +191,7 @@ def test_api_stays_live_and_provider_closes_when_model_startup_fails() -> None:
   assert forecast.json()["error"]["code"] == "MODEL_NOT_READY"
   assert backtest.status_code == 503
   assert backtest.json()["error"]["code"] == "MODEL_NOT_READY"
+  assert screen.status_code == 503
+  assert screen.json()["error"]["code"] == "MODEL_NOT_READY"
   assert provider.history_calls == 0
   assert provider.closed

@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime
 from typing import Literal
 from uuid import uuid4
@@ -6,7 +7,7 @@ import numpy as np
 from fastapi import APIRouter, Query, Request
 
 from app.errors import AppError
-from app.providers.base import MarketDataProvider
+from app.providers.base import HistoryData, MarketDataProvider
 from app.schemas import (
     BacktestMetadata,
     BacktestPoint,
@@ -17,12 +18,17 @@ from app.schemas import (
     ForecastRequest,
     ForecastResponse,
     HistoryResponse,
+    Nifty50ScreenMetadata,
+    Nifty50ScreenRequest,
+    Nifty50ScreenResponse,
+    Nifty50ScreenResult,
     SearchResponse,
 )
 from app.services.analysis import analyze_forecast
 from app.services.backtest import evaluate_backtest
 from app.services.calendar import TradingCalendar
 from app.services.forecast import ForecastModel
+from app.services.nifty50 import NIFTY50_SYMBOLS
 
 router = APIRouter(prefix="/api/v1")
 DISPLAY_PERIODS = {
@@ -40,6 +46,12 @@ BACKTEST_DISCLAIMER = (
     "This historical back-check measures one seven-session holdout and does not "
     "guarantee future forecasting performance or provide financial advice."
 )
+NIFTY50_SCREEN_DISCLAIMER = (
+    "This ranking compares positive TimesFM median forecast changes for research "
+    "only. It does not consider valuation, fundamentals, news, liquidity, risk, "
+    "or personal circumstances and is not a buy, sell, or hold recommendation."
+)
+NIFTY50_HISTORY_CONCURRENCY = 5
 
 
 def _provider(request: Request) -> MarketDataProvider:
@@ -153,6 +165,126 @@ async def create_forecast(
           is_data_stale=history.metadata.is_stale,
       ),
       disclaimer=DISCLAIMER,
+  )
+
+
+@router.post(
+    "/research/nifty50/screen",
+    response_model=Nifty50ScreenResponse,
+)
+async def screen_nifty50(
+    body: Nifty50ScreenRequest,
+    request: Request,
+) -> Nifty50ScreenResponse:
+  _require_model_ready(request)
+  provider = _provider(request)
+  semaphore = asyncio.Semaphore(NIFTY50_HISTORY_CONCURRENCY)
+
+  async def load_history(symbol: str) -> tuple[str, HistoryData | None]:
+    async with semaphore:
+      try:
+        return symbol, await provider.history(symbol, "5y")
+      except AppError as error:
+        if error.code in {"SECURITY_NOT_FOUND", "UNSUPPORTED_SECURITY"}:
+          return symbol, None
+        raise
+
+  loaded = await asyncio.gather(
+      *(load_history(symbol) for symbol in NIFTY50_SYMBOLS)
+  )
+  minimum = request.app.state.settings.min_history_observations
+  histories: list[HistoryData] = []
+  unavailable_symbols: list[str] = []
+  for symbol, history in loaded:
+    if history is None or len(history.prices) < minimum:
+      unavailable_symbols.append(symbol)
+    else:
+      histories.append(history)
+
+  if not histories:
+    raise AppError(
+        "NIFTY50_SCREEN_UNAVAILABLE",
+        "No NIFTY 50 constituents have enough valid daily history to compare.",
+        status_code=422,
+        details={
+            "required_observations": minimum,
+            "unavailable_symbols": unavailable_symbols,
+        },
+    )
+
+  contexts = [
+      np.asarray(
+          [point.adjusted_close for point in history.prices],
+          dtype=np.float32,
+      )
+      for history in histories
+  ]
+  outputs = await _model(request).predict_batch(contexts, body.horizon)
+  candidates = []
+  for history, output in zip(histories, outputs, strict=True):
+    latest_close = history.prices[-1].adjusted_close
+    final_p10 = output.p10[-1]
+    final_p50 = output.p50[-1]
+    final_p90 = output.p90[-1]
+    change = ((final_p50 - latest_close) / latest_close) * 100
+    if change <= 0:
+      continue
+    end_date = _calendar(request).next_sessions(
+        history.security.exchange,
+        history.prices[-1].date,
+        body.horizon,
+    )[-1]
+    candidates.append(
+        (
+            change,
+            history,
+            end_date,
+            final_p10,
+            final_p50,
+            final_p90,
+        )
+    )
+
+  candidates.sort(key=lambda candidate: candidate[0], reverse=True)
+  results = [
+      Nifty50ScreenResult(
+          rank=rank,
+          security=history.security,
+          latest_close=history.prices[-1].adjusted_close,
+          forecast_end=final_p50,
+          forecast_change_percent=change,
+          forecast_end_date=end_date,
+          final_p10=final_p10,
+          final_p50=final_p50,
+          final_p90=final_p90,
+          final_interval_width_percent=((final_p90 - final_p10) / final_p50) * 100,
+          is_data_stale=history.metadata.is_stale,
+      )
+      for rank, (
+          change,
+          history,
+          end_date,
+          final_p10,
+          final_p50,
+          final_p90,
+      ) in enumerate(candidates[:5], start=1)
+  ]
+  model = _model(request)
+  return Nifty50ScreenResponse(
+      results=results,
+      metadata=Nifty50ScreenMetadata(
+          horizon_trading_days=body.horizon,
+          universe_size=len(NIFTY50_SYMBOLS),
+          analyzed_count=len(histories),
+          positive_count=len(candidates),
+          unavailable_symbols=unavailable_symbols,
+          provider=histories[0].metadata.provider,
+          backend=model.backend_name,
+          model=model.model_id,
+          model_version=model.model_version,
+          generated_at=datetime.now(UTC),
+      ),
+      disclaimer=NIFTY50_SCREEN_DISCLAIMER,
   )
 
 

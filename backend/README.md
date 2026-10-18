@@ -130,6 +130,21 @@ predicts those seven sessions using only the earlier context, and returns the
 actual and p10/p50/p90 values. It also reports mean absolute error, mean
 absolute percentage error, and p10-p90 interval coverage.
 
+### NIFTY 50 positive forecast screen
+
+```http
+POST /api/v1/research/nifty50/screen
+Content-Type: application/json
+
+{"horizon":20}
+```
+
+The endpoint loads five years of daily adjusted closes for the checked-in
+NIFTY 50 snapshot, runs one TimesFM batch, and returns up to five constituents
+with the highest positive median percentage changes. The response reports the
+analyzed and unavailable symbols plus final p10-p90 uncertainty. It is not an
+investment recommendation.
+
 ## Data and model flow
 
 1. Fetch up to five years of adjusted daily close data.
@@ -159,6 +174,7 @@ Tests cover:
 - endpoint success and error contracts;
 - insufficient history;
 - seven-session holdout isolation and metrics;
+- NIFTY 50 batch screening and positive-change ranking;
 - application startup cleanup;
 - local adapter checkpoint requirements;
 - decile-to-p10/p50/p90 mapping.

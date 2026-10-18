@@ -53,10 +53,12 @@ market-data credentials, model credentials, or checkpoint paths.
    **Predict selected stock**.
 4. Review the neutral model-screening signal, price range, uncertainty, metadata,
    and disclaimer. The signal is not a buy recommendation.
-5. Optionally change the display range, moving-average overlays, or forecast
+5. Optionally compare all available NIFTY 50 constituents and view up to five
+   positive median forecast changes for the selected horizon.
+6. Optionally change the display range, moving-average overlays, or forecast
    horizon.
-6. Optionally back-check the model against the latest seven known sessions.
-7. Open **Stock explorer** to search any supported NSE/BSE common stock; search
+7. Optionally back-check the model against the latest seven known sessions.
+8. Open **Stock explorer** to search any supported NSE/BSE common stock; search
    starts after a 300 ms debounce.
 
 The checked-in research list is a snapshot of the official
@@ -72,6 +74,7 @@ Index membership can change during scheduled reviews.
   chosen in the dropdown.
 - Range changes affect historical display but not the forecast horizon.
 - Forecast success moves keyboard focus to the result heading.
+- NIFTY 50 comparison success moves keyboard focus to its result heading.
 - Back-check success moves keyboard focus to its result heading.
 - A symbol change aborts both forecast and back-check requests.
 

@@ -5,6 +5,7 @@ import type {
   ForecastResponse,
   HistoryRange,
   HistoryResponse,
+  Nifty50ScreenResponse,
   Security,
 } from "../types";
 
@@ -90,6 +91,17 @@ export function createBacktest(
   return request("/backtests", {
     method: "POST",
     body: JSON.stringify({ symbol }),
+    signal,
+  });
+}
+
+export function screenNifty50(
+  horizon: ForecastHorizon,
+  signal: AbortSignal,
+): Promise<Nifty50ScreenResponse> {
+  return request("/research/nifty50/screen", {
+    method: "POST",
+    body: JSON.stringify({ horizon }),
     signal,
   });
 }

@@ -64,3 +64,44 @@ async def test_adapter_maps_timesfm_deciles_to_public_quantiles() -> None:
   assert result.p10 == [90, 91]
   assert result.p50 == [101, 102]
   assert result.p90 == [110, 111]
+
+
+@pytest.mark.anyio
+async def test_adapter_batches_multiple_contexts() -> None:
+  class Output:
+    def __init__(self, latest: float) -> None:
+      self.forecast = np.asarray([latest + 1, latest + 2], dtype=np.float32)
+      self.quantiles = np.asarray(
+          [
+              [latest - 4, 0, 0, 0, latest + 1, 0, 0, 0, latest + 6],
+              [latest - 3, 0, 0, 0, latest + 2, 0, 0, 0, latest + 7],
+          ],
+          dtype=np.float32,
+      )
+
+  class Forecaster:
+    def predict_batch(
+        self,
+        contexts: list[np.ndarray],
+        *,
+        horizon: int,
+        return_quantiles: bool,
+        use_symmetric_averaging: bool,
+    ) -> list[Output]:
+      assert horizon == 2
+      assert return_quantiles
+      assert not use_symmetric_averaging
+      return [Output(float(context[-1])) for context in contexts]
+
+  adapter = make_adapter()
+  adapter._forecaster = Forecaster()
+
+  results = await adapter.predict_batch(
+      [
+          np.asarray([98, 99, 100], dtype=np.float32),
+          np.asarray([198, 199, 200], dtype=np.float32),
+      ],
+      2,
+  )
+
+  assert [result.p50 for result in results] == [[101, 102], [201, 202]]

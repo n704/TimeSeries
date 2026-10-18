@@ -66,6 +66,37 @@ export interface ForecastResponse {
   disclaimer: string;
 }
 
+export interface Nifty50ScreenResult {
+  rank: number;
+  security: Security;
+  latest_close: number;
+  forecast_end: number;
+  forecast_change_percent: number;
+  forecast_end_date: string;
+  final_p10: number;
+  final_p50: number;
+  final_p90: number;
+  final_interval_width_percent: number;
+  is_data_stale: boolean;
+}
+
+export interface Nifty50ScreenResponse {
+  results: Nifty50ScreenResult[];
+  metadata: {
+    horizon_trading_days: number;
+    universe_size: number;
+    analyzed_count: number;
+    positive_count: number;
+    unavailable_symbols: string[];
+    provider: string;
+    backend: string;
+    model: string;
+    model_version: string;
+    generated_at: string;
+  };
+  disclaimer: string;
+}
+
 export interface BacktestPoint {
   date: string;
   actual: number;
