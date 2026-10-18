@@ -8,6 +8,7 @@ import {
   searchSecurities,
 } from "./api/client";
 import { PriceChart } from "./components/PriceChart";
+import { defaultNiftySecurity, nifty50Constituents } from "./nifty50";
 import type {
   BacktestResponse,
   ForecastHorizon,
@@ -19,63 +20,6 @@ import type {
 
 const ranges: HistoryRange[] = ["6m", "1y", "2y", "5y"];
 const horizons: ForecastHorizon[] = [5, 20, 60];
-const nifty50Presets: Security[] = [
-  {
-    symbol: "RELIANCE.NS",
-    name: "Reliance Industries Limited",
-    exchange: "NSE",
-    region: "India",
-    currency: "INR",
-    instrument_type: "common_stock",
-    timezone: "Asia/Kolkata",
-  },
-  {
-    symbol: "HDFCBANK.NS",
-    name: "HDFC Bank Limited",
-    exchange: "NSE",
-    region: "India",
-    currency: "INR",
-    instrument_type: "common_stock",
-    timezone: "Asia/Kolkata",
-  },
-  {
-    symbol: "ICICIBANK.NS",
-    name: "ICICI Bank Limited",
-    exchange: "NSE",
-    region: "India",
-    currency: "INR",
-    instrument_type: "common_stock",
-    timezone: "Asia/Kolkata",
-  },
-  {
-    symbol: "INFY.NS",
-    name: "Infosys Limited",
-    exchange: "NSE",
-    region: "India",
-    currency: "INR",
-    instrument_type: "common_stock",
-    timezone: "Asia/Kolkata",
-  },
-  {
-    symbol: "TCS.NS",
-    name: "Tata Consultancy Services Limited",
-    exchange: "NSE",
-    region: "India",
-    currency: "INR",
-    instrument_type: "common_stock",
-    timezone: "Asia/Kolkata",
-  },
-  {
-    symbol: "BHARTIARTL.NS",
-    name: "Bharti Airtel Limited",
-    exchange: "NSE",
-    region: "India",
-    currency: "INR",
-    instrument_type: "common_stock",
-    timezone: "Asia/Kolkata",
-  },
-];
-const defaultNiftySecurity = nifty50Presets[0];
 
 type AppTab = "research" | "explore";
 
@@ -167,6 +111,7 @@ export default function App() {
   const forecastRequestRef = useRef<AbortController | null>(null);
   const backtestRequestRef = useRef<AbortController | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>("research");
+  const [niftyQuery, setNiftyQuery] = useState("");
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Security[]>([]);
   const [searching, setSearching] = useState(false);
@@ -324,6 +269,14 @@ export default function App() {
     "INR";
   const latest = activeHistory.at(-1);
   const researchSignal = forecast ? getResearchSignal(forecast) : null;
+  const normalizedNiftyQuery = niftyQuery.trim().toLocaleLowerCase();
+  const filteredNiftyConstituents = normalizedNiftyQuery
+    ? nifty50Constituents.filter(
+        ({ name, symbol }) =>
+          name.toLocaleLowerCase().includes(normalizedNiftyQuery) ||
+          symbol.toLocaleLowerCase().includes(normalizedNiftyQuery),
+      )
+    : nifty50Constituents;
 
   return (
     <div className="app-shell">
@@ -347,7 +300,7 @@ export default function App() {
             onClick={() => {
               setActiveTab("research");
               const preset =
-                nifty50Presets.find(({ symbol }) => symbol === selected?.symbol) ??
+                nifty50Constituents.find(({ symbol }) => symbol === selected?.symbol) ??
                 defaultNiftySecurity;
               chooseSecurity(preset, true);
             }}
@@ -375,30 +328,53 @@ export default function App() {
             aria-labelledby="research-tab"
           >
             <p className="eyebrow">NIFTY 50 RESEARCH</p>
-            <h1>Start with a market leader.<br /><span>See the modeled range.</span></h1>
+            <h1>Research all <span>NIFTY 50 stocks.</span></h1>
             <p className="hero-copy">
               Reliance is selected by default and its 20-session TimesFM forecast
-              starts automatically. Choose another featured constituent to compare
-              its price range and uncertainty.
+              starts automatically. Filter or select any constituent to load its
+              history and modeled price range.
             </p>
-            <div className="preset-grid" aria-label="Featured NIFTY 50 constituents">
-              {nifty50Presets.map((security) => (
-                <button
-                  type="button"
-                  key={security.symbol}
-                  className={selected?.symbol === security.symbol ? "active" : ""}
-                  aria-pressed={selected?.symbol === security.symbol}
-                  onClick={() => chooseSecurity(security, true)}
-                >
-                  <span>{security.name.replace(" Limited", "")}</span>
-                  <strong>{security.symbol.replace(".NS", "")}</strong>
-                </button>
-              ))}
-            </div>
-            <p className="preset-note">
-              Featured shortcuts are a research starting point, not a complete
-              live index-membership feed or an investment recommendation.
-            </p>
+            <section className="constituent-panel" aria-labelledby="constituent-heading">
+              <div className="constituent-heading">
+                <div>
+                  <h2 id="constituent-heading">NIFTY 50 constituents</h2>
+                  <p>{filteredNiftyConstituents.length} of 50 stocks shown</p>
+                </div>
+                <label className="constituent-filter">
+                  <span>Filter constituents</span>
+                  <input
+                    type="search"
+                    value={niftyQuery}
+                    placeholder="Company or symbol"
+                    onChange={(event) => setNiftyQuery(event.target.value)}
+                  />
+                </label>
+              </div>
+              {filteredNiftyConstituents.length ? (
+                <ul className="constituent-grid">
+                  {filteredNiftyConstituents.map((security) => (
+                    <li key={security.symbol}>
+                      <button
+                        type="button"
+                        className={selected?.symbol === security.symbol ? "active" : ""}
+                        aria-pressed={selected?.symbol === security.symbol}
+                        onClick={() => chooseSecurity(security, true)}
+                      >
+                        <span>{security.name}</span>
+                        <strong>{security.symbol.replace(".NS", "")}</strong>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="constituent-empty">No NIFTY 50 constituent matches that filter.</p>
+              )}
+              <p className="preset-note">
+                Constituent snapshot from NSE Indices. Membership can change at
+                index reviews; this list is for research navigation, not an
+                investment recommendation.
+              </p>
+            </section>
           </section>
         ) : (
           <section
