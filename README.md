@@ -4,7 +4,7 @@ A Mac-first stock trend forecasting application with:
 
 - a Python 3.11 and FastAPI backend;
 - a React and TypeScript frontend;
-- a default NIFTY 50 research workflow with featured constituent shortcuts;
+- a default NIFTY 50 research workflow with a constituent dropdown and prediction action;
 - daily Indian common-stock data from Yahoo Finance;
 - an on-disk Google Research TimesFM 3.0 checkpoint;
 - historical and forecast charts with p10-p90 uncertainty ranges.

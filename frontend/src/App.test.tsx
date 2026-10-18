@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 import App from "./App";
 import { ApiError } from "./api/client";
@@ -109,15 +115,20 @@ describe("App", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: /start with a market leader.*see the modeled range/i,
+        name: /research all nifty 50 stocks/i,
       }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("tab", { name: /nifty 50 research/i }),
     ).toHaveAttribute("aria-selected", "true");
-    expect(
-      screen.getByRole("button", { name: /Reliance Industries.*RELIANCE/i }),
-    ).toHaveAttribute("aria-pressed", "true");
+    const constituentPanel = screen.getByRole("region", {
+      name: /predict a nifty 50 stock/i,
+    });
+    const stockSelect = within(constituentPanel).getByRole("combobox", {
+      name: /nifty 50 stock/i,
+    });
+    expect(stockSelect).toHaveValue("RELIANCE.NS");
+    expect(within(stockSelect).getAllByRole("option")).toHaveLength(50);
     await waitFor(() =>
       expect(apiMocks.getHistory).toHaveBeenCalledWith(
         "RELIANCE.NS",
@@ -137,7 +148,61 @@ describe("App", () => {
         name: /positive median, overlapping downside/i,
       }),
     ).toBeInTheDocument();
+    expect(
+      within(constituentPanel).getByRole("button", {
+        name: /predict selected stock/i,
+      }),
+    ).toBeInTheDocument();
     expect(screen.getByText(/not a buy recommendation/i)).toBeInTheDocument();
+  });
+
+  it("predicts the NIFTY 50 stock chosen from the dropdown", async () => {
+    const hdfcSecurity = {
+      ...security,
+      symbol: "HDFCBANK.NS",
+      name: "HDFC Bank Ltd.",
+    };
+    render(<App />);
+    await waitFor(() => expect(apiMocks.createForecast).toHaveBeenCalledTimes(1));
+    await screen.findByRole("button", { name: /predict selected stock/i });
+    apiMocks.getHistory.mockResolvedValue({
+      ...historyResponse,
+      security: hdfcSecurity,
+    });
+    apiMocks.createForecast.mockResolvedValue({
+      ...forecastResponse,
+      security: hdfcSecurity,
+    });
+    const constituentPanel = screen.getByRole("region", {
+      name: /predict a nifty 50 stock/i,
+    });
+
+    fireEvent.change(
+      within(constituentPanel).getByRole("combobox", {
+        name: /nifty 50 stock/i,
+      }),
+      { target: { value: "HDFCBANK.NS" } },
+    );
+    fireEvent.click(
+      within(constituentPanel).getByRole("button", {
+        name: /predict selected stock/i,
+      }),
+    );
+
+    await waitFor(() =>
+      expect(apiMocks.getHistory).toHaveBeenLastCalledWith(
+        "HDFCBANK.NS",
+        "1y",
+        expect.any(AbortSignal),
+      ),
+    );
+    await waitFor(() =>
+      expect(apiMocks.createForecast).toHaveBeenLastCalledWith(
+        "HDFCBANK.NS",
+        20,
+        expect.any(AbortSignal),
+      ),
+    );
   });
 
   it("keeps stock search available in the explorer tab", () => {
@@ -159,12 +224,13 @@ describe("App", () => {
     expect(screen.getByText(/not financial advice/i)).toBeInTheDocument();
   });
 
-  it("refreshes and forecasts when the active research preset is selected again", async () => {
+  it("re-runs the selected NIFTY 50 prediction from the button", async () => {
     render(<App />);
     await waitFor(() => expect(apiMocks.createForecast).toHaveBeenCalledTimes(1));
+    await screen.findByRole("button", { name: /predict selected stock/i });
 
     fireEvent.click(
-      screen.getByRole("button", { name: /Reliance Industries.*RELIANCE/i }),
+      screen.getByRole("button", { name: /predict selected stock/i }),
     );
 
     await waitFor(() => expect(apiMocks.getHistory).toHaveBeenCalledTimes(2));
