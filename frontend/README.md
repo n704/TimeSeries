@@ -49,7 +49,7 @@ market-data credentials, model credentials, or checkpoint paths.
 
 1. Open the default **NIFTY 50 research** tab.
 2. Reliance is selected and its 20-session forecast starts automatically.
-3. Optionally choose another featured NIFTY 50 constituent shortcut.
+3. Browse or filter the full NIFTY 50 constituent list and choose another stock.
 4. Review the neutral model-screening signal, price range, uncertainty, metadata,
    and disclaimer. The signal is not a buy recommendation.
 5. Optionally change the display range, moving-average overlays, or forecast
@@ -58,12 +58,16 @@ market-data credentials, model credentials, or checkpoint paths.
 7. Open **Stock explorer** to search any supported NSE/BSE common stock; search
    starts after a 300 ms debounce.
 
+The checked-in research list is a snapshot of the official
+[NIFTY 50 constituent CSV](https://www.niftyindices.com/IndexConstituent/ind_nifty50list.csv).
+Index membership can change during scheduled reviews.
+
 ## Request state rules
 
 - Search, history, and forecast requests use `AbortController`.
 - Selecting a new stock clears previous history and forecast data.
 - A stale response must never overwrite the currently selected stock.
-- Featured research presets automatically forecast only the newly selected
+- NIFTY 50 constituent selections automatically forecast only the newly selected
   security.
 - Range changes affect historical display but not the forecast horizon.
 - Forecast success moves keyboard focus to the result heading.

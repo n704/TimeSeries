@@ -1,4 +1,10 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 
 import App from "./App";
 import { ApiError } from "./api/client";
@@ -109,7 +115,7 @@ describe("App", () => {
 
     expect(
       screen.getByRole("heading", {
-        name: /start with a market leader.*see the modeled range/i,
+        name: /research all nifty 50 stocks/i,
       }),
     ).toBeInTheDocument();
     expect(
@@ -118,6 +124,11 @@ describe("App", () => {
     expect(
       screen.getByRole("button", { name: /Reliance Industries.*RELIANCE/i }),
     ).toHaveAttribute("aria-pressed", "true");
+    const constituentPanel = screen.getByRole("region", {
+      name: /nifty 50 constituents/i,
+    });
+    expect(within(constituentPanel).getAllByRole("button")).toHaveLength(50);
+    expect(within(constituentPanel).getByText("50 of 50 stocks shown")).toBeInTheDocument();
     await waitFor(() =>
       expect(apiMocks.getHistory).toHaveBeenCalledWith(
         "RELIANCE.NS",
@@ -138,6 +149,25 @@ describe("App", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText(/not a buy recommendation/i)).toBeInTheDocument();
+  });
+
+  it("filters the visible NIFTY 50 constituent list", () => {
+    render(<App />);
+    const constituentPanel = screen.getByRole("region", {
+      name: /nifty 50 constituents/i,
+    });
+
+    fireEvent.change(
+      within(constituentPanel).getByRole("searchbox", {
+        name: /filter constituents/i,
+      }),
+      { target: { value: "BSE" } },
+    );
+
+    expect(within(constituentPanel).getByText("1 of 50 stocks shown")).toBeInTheDocument();
+    expect(
+      within(constituentPanel).getByRole("button", { name: /BSE Ltd.*BSE/i }),
+    ).toBeInTheDocument();
   });
 
   it("keeps stock search available in the explorer tab", () => {

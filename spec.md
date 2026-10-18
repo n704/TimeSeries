@@ -29,8 +29,8 @@ estimates, not guaranteed outcomes or investment advice.
 
 1. Accept a company name or ticker and resolve it to an unambiguous listed
    security.
-2. Provide a default NIFTY 50 research starting point with a small set of
-   featured constituent shortcuts.
+2. Provide a default NIFTY 50 research starting point with a filterable
+   constituent list.
 3. Show historical adjusted closing prices and basic trend context in
    interactive charts.
 4. Forecast the next 5, 20, or 60 trading days with TimesFM.
@@ -69,8 +69,8 @@ short- or medium-term trend and understands that model output is uncertain.
 1. The user opens the application on the **NIFTY 50 research** tab.
 2. Reliance is selected by default, its adjusted-close history loads, and the
    20-session forecast starts automatically.
-3. The user may select another featured NIFTY 50 constituent and receives the
-   same automatic forecast workflow.
+3. The user may browse or filter the NIFTY 50 constituent list, select another
+   stock, and receive the same automatic forecast workflow.
 4. The UI shows a neutral screening label derived from the final forecast
    quantiles. It helps choose what to research next and is not a buy, sell, or
    hold recommendation.
@@ -96,16 +96,17 @@ the provider returns one unique active listing.
 ### 5.1 NIFTY 50 research entry
 
 - `FR-RESEARCH-01`: The NIFTY 50 research tab is selected on initial load.
-- `FR-RESEARCH-02`: Reliance Industries is the default featured constituent and
+- `FR-RESEARCH-02`: Reliance Industries is the default constituent and
   automatically requests the default 20-session forecast after history loads.
-- `FR-RESEARCH-03`: Selecting another featured constituent aborts stale history,
+- `FR-RESEARCH-03`: Selecting another constituent aborts stale history,
   forecast, and back-check requests before loading and forecasting the new
   security.
 - `FR-RESEARCH-04`: The research signal describes whether the final p10-p90
   range is above, below, or crosses the latest adjusted close. It must state
   which inputs it omits and that it is not a buy recommendation.
-- `FR-RESEARCH-05`: Featured shortcuts are not presented as a complete or
-  real-time index-membership feed.
+- `FR-RESEARCH-05`: The tab displays all 50 constituents from a checked-in NSE
+  Indices snapshot and provides client-side filtering by company name or symbol.
+  It is not presented as a real-time index-membership feed.
 
 ### 5.2 Security search and selection
 
@@ -251,7 +252,7 @@ The MVP is a single-page application with these regions:
    - Product name.
    - Short subtitle: "Explore time-series forecasts for listed stocks."
 2. **Workflow tabs**
-   - Default NIFTY 50 research entry with featured constituent shortcuts.
+   - Default NIFTY 50 research entry with a filterable constituent list.
    - Stock explorer entry for provider-backed security search.
 3. **Search panel**
    - Accessible combobox for security search.
