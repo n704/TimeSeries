@@ -111,7 +111,7 @@ export default function App() {
   const forecastRequestRef = useRef<AbortController | null>(null);
   const backtestRequestRef = useRef<AbortController | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>("research");
-  const [niftyQuery, setNiftyQuery] = useState("");
+  const [researchSymbol, setResearchSymbol] = useState(defaultNiftySecurity.symbol);
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Security[]>([]);
   const [searching, setSearching] = useState(false);
@@ -248,6 +248,13 @@ export default function App() {
     }
   }
 
+  function predictResearchSecurity() {
+    const security = nifty50Constituents.find(
+      ({ symbol }) => symbol === researchSymbol,
+    );
+    if (security) chooseSecurity(security, true);
+  }
+
   useEffect(() => {
     if (
       !autoForecastSymbol ||
@@ -269,14 +276,6 @@ export default function App() {
     "INR";
   const latest = activeHistory.at(-1);
   const researchSignal = forecast ? getResearchSignal(forecast) : null;
-  const normalizedNiftyQuery = niftyQuery.trim().toLocaleLowerCase();
-  const filteredNiftyConstituents = normalizedNiftyQuery
-    ? nifty50Constituents.filter(
-        ({ name, symbol }) =>
-          name.toLocaleLowerCase().includes(normalizedNiftyQuery) ||
-          symbol.toLocaleLowerCase().includes(normalizedNiftyQuery),
-      )
-    : nifty50Constituents;
 
   return (
     <div className="app-shell">
@@ -302,6 +301,7 @@ export default function App() {
               const preset =
                 nifty50Constituents.find(({ symbol }) => symbol === selected?.symbol) ??
                 defaultNiftySecurity;
+              setResearchSymbol(preset.symbol);
               chooseSecurity(preset, true);
             }}
           >
@@ -331,44 +331,48 @@ export default function App() {
             <h1>Research all <span>NIFTY 50 stocks.</span></h1>
             <p className="hero-copy">
               Reliance is selected by default and its 20-session TimesFM forecast
-              starts automatically. Filter or select any constituent to load its
-              history and modeled price range.
+              starts automatically. Choose any constituent from the dropdown,
+              then run its prediction.
             </p>
             <section className="constituent-panel" aria-labelledby="constituent-heading">
               <div className="constituent-heading">
                 <div>
-                  <h2 id="constituent-heading">NIFTY 50 constituents</h2>
-                  <p>{filteredNiftyConstituents.length} of 50 stocks shown</p>
+                  <h2 id="constituent-heading">Predict a NIFTY 50 stock</h2>
+                  <p>50 constituents available</p>
                 </div>
-                <label className="constituent-filter">
-                  <span>Filter constituents</span>
-                  <input
-                    type="search"
-                    value={niftyQuery}
-                    placeholder="Company or symbol"
-                    onChange={(event) => setNiftyQuery(event.target.value)}
-                  />
-                </label>
               </div>
-              {filteredNiftyConstituents.length ? (
-                <ul className="constituent-grid">
-                  {filteredNiftyConstituents.map((security) => (
-                    <li key={security.symbol}>
-                      <button
-                        type="button"
-                        className={selected?.symbol === security.symbol ? "active" : ""}
-                        aria-pressed={selected?.symbol === security.symbol}
-                        onClick={() => chooseSecurity(security, true)}
-                      >
-                        <span>{security.name}</span>
-                        <strong>{security.symbol.replace(".NS", "")}</strong>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                <p className="constituent-empty">No NIFTY 50 constituent matches that filter.</p>
-              )}
+              <form
+                className="constituent-picker"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  predictResearchSecurity();
+                }}
+              >
+                <label className="constituent-select">
+                  <span>NIFTY 50 stock</span>
+                  <select
+                    value={researchSymbol}
+                    onChange={(event) => setResearchSymbol(event.target.value)}
+                  >
+                    {nifty50Constituents.map((security) => (
+                      <option key={security.symbol} value={security.symbol}>
+                        {security.name} ({security.symbol.replace(".NS", "")})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="submit"
+                  className="primary-button constituent-predict"
+                  disabled={forecasting || backtesting}
+                >
+                  {loadingHistory && selected?.symbol === researchSymbol
+                    ? "Loading history..."
+                    : forecasting && selected?.symbol === researchSymbol
+                      ? "Predicting..."
+                      : "Predict selected stock"}
+                </button>
+              </form>
               <p className="preset-note">
                 Constituent snapshot from NSE Indices. Membership can change at
                 index reviews; this list is for research navigation, not an

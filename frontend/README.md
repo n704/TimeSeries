@@ -49,7 +49,8 @@ market-data credentials, model credentials, or checkpoint paths.
 
 1. Open the default **NIFTY 50 research** tab.
 2. Reliance is selected and its 20-session forecast starts automatically.
-3. Browse or filter the full NIFTY 50 constituent list and choose another stock.
+3. Choose any of the 50 constituents from the dropdown and select
+   **Predict selected stock**.
 4. Review the neutral model-screening signal, price range, uncertainty, metadata,
    and disclaimer. The signal is not a buy recommendation.
 5. Optionally change the display range, moving-average overlays, or forecast
@@ -67,8 +68,8 @@ Index membership can change during scheduled reviews.
 - Search, history, and forecast requests use `AbortController`.
 - Selecting a new stock clears previous history and forecast data.
 - A stale response must never overwrite the currently selected stock.
-- NIFTY 50 constituent selections automatically forecast only the newly selected
-  security.
+- The NIFTY 50 prediction button loads and forecasts only the stock currently
+  chosen in the dropdown.
 - Range changes affect historical display but not the forecast horizon.
 - Forecast success moves keyboard focus to the result heading.
 - Back-check success moves keyboard focus to its result heading.
