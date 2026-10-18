@@ -26,6 +26,10 @@ npm run dev
 The development server runs at `http://localhost:5173` and proxies `/api` and
 `/health` to `http://localhost:8000`.
 
+Docker Compose sets the development-only `VITE_PROXY_TARGET` to
+`http://backend:8000` so the Vite container reaches the backend service. Normal
+local development keeps the default `http://localhost:8000`.
+
 To use a different API origin:
 
 ```bash

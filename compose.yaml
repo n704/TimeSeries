@@ -1,0 +1,61 @@
+name: timeseries-forecast-lab
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.dev
+    command:
+      - uv
+      - run
+      - uvicorn
+      - app.main:app
+      - --reload
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+    env_file:
+      - .env
+    environment:
+      TIMESFM_BACKEND: pytorch
+      TIMESFM_CHECKPOINT_PATH: /models/timesfm
+      TIMESFM_DEVICE: cpu
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend:/app
+      - type: bind
+        source: ${TIMESFM_CHECKPOINT_HOST_PATH}
+        target: /models/timesfm
+        read_only: true
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - >-
+          import urllib.request;
+          urllib.request.urlopen("http://127.0.0.1:8000/health/ready", timeout=5)
+      interval: 10s
+      timeout: 6s
+      retries: 6
+      start_period: 180s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile.dev
+    environment:
+      VITE_PROXY_TARGET: http://backend:8000
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - frontend_node_modules:/app/node_modules
+    depends_on:
+      backend:
+        condition: service_started
+
+volumes:
+  frontend_node_modules:

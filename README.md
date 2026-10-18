@@ -147,7 +147,21 @@ npm run build
 
 ## 6. Run the application
 
-Use two terminals from the repository root.
+Start both local services from the repository root:
+
+```bash
+uv run --project backend python scripts/start_services.py
+```
+
+The supervisor validates `uv`, `npm`, and the configured TimesFM checkpoint,
+starts both processes, and stops the other service if either process exits.
+Validate prerequisites without starting anything:
+
+```bash
+uv run --project backend python scripts/start_services.py --check
+```
+
+Alternatively, use two terminals.
 
 Backend:
 
@@ -174,6 +188,25 @@ curl http://localhost:8000/health/ready
 ```
 
 The readiness endpoint returns `503` until TimesFM has loaded.
+
+### Docker Compose development stack
+
+Set `TIMESFM_CHECKPOINT_HOST_PATH` in `.env` to the same absolute checkpoint
+directory used by `TIMESFM_CHECKPOINT_PATH`, then run:
+
+```bash
+docker compose up --build
+```
+
+Open [http://localhost:5173](http://localhost:5173). Stop the stack with:
+
+```bash
+docker compose down
+```
+
+Compose bind-mounts the checkpoint read-only at `/models/timesfm`; it never
+copies model weights into an image. The Linux backend uses PyTorch CPU because
+MLX is macOS-only. This stack is for local evaluation, not production.
 
 ## API summary
 
