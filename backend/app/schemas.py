@@ -2,7 +2,7 @@ from datetime import date, datetime
 from enum import StrEnum
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class InstrumentType(StrEnum):
@@ -177,6 +177,58 @@ class BacktestResponse(BaseModel):
   metrics: BacktestMetrics
   metadata: BacktestMetadata
   disclaimer: str
+
+
+class TrackingOutlook(BaseModel):
+  date: date
+  p10: float = Field(gt=0)
+  p50: float = Field(gt=0)
+  p90: float = Field(gt=0)
+  generated_at: datetime
+
+  @model_validator(mode="after")
+  def validate_quantile_order(self) -> "TrackingOutlook":
+    if not self.p10 <= self.p50 <= self.p90:
+      raise ValueError("Tracking outlook quantiles must satisfy p10 <= p50 <= p90.")
+    return self
+
+
+class WatchlistItem(BaseModel):
+  security: Security
+  latest_close: float = Field(gt=0)
+  last_market_date: date
+  added_at: datetime
+
+
+class PortfolioPosition(BaseModel):
+  security: Security
+  quantity: float = Field(gt=0)
+  average_price: float = Field(gt=0)
+  latest_close: float = Field(gt=0)
+  last_market_date: date
+  outlooks: dict[Literal["7", "20", "60"], TrackingOutlook] = Field(
+      default_factory=dict
+  )
+  updated_at: datetime
+
+
+class TrackingState(BaseModel):
+  watchlist: list[WatchlistItem] = Field(default_factory=list, max_length=20)
+  positions: list[PortfolioPosition] = Field(default_factory=list, max_length=20)
+
+  @model_validator(mode="after")
+  def validate_unique_symbols(self) -> "TrackingState":
+    watchlist_symbols = [item.security.symbol for item in self.watchlist]
+    position_symbols = [item.security.symbol for item in self.positions]
+    if len(watchlist_symbols) != len(set(watchlist_symbols)):
+      raise ValueError("Watchlist symbols must be unique.")
+    if len(position_symbols) != len(set(position_symbols)):
+      raise ValueError("Portfolio position symbols must be unique.")
+    return self
+
+
+class TrackingStateResponse(TrackingState):
+  updated_at: datetime | None = None
 
 
 class ErrorBody(BaseModel):

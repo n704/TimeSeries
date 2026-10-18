@@ -7,11 +7,13 @@ A Mac-first stock trend forecasting application with:
 - a default NIFTY 50 research workflow with a constituent dropdown and prediction action;
 - daily Indian common-stock data from Yahoo Finance;
 - an on-disk Google Research TimesFM 3.0 checkpoint;
-- historical and forecast charts with p10-p90 uncertainty ranges.
+- historical and forecast charts with p10-p90 uncertainty ranges;
+- a SQLite-backed watchlist and paper portfolio with selectable 7-, 20-, and
+  60-session probabilistic outlooks.
 
 The application forecasts 5, 20, or 60 future trading sessions. It does not
-support intraday data, options, cryptocurrency, trade execution, or financial
-recommendations.
+support intraday data, options, cryptocurrency, brokerage connections, trade
+execution, or financial recommendations.
 
 > Forecasts are uncertain statistical estimates for local research only and are
 > not financial advice.
@@ -217,6 +219,8 @@ MLX is macOS-only. This stack is for local evaluation, not production.
 | `POST` | `/api/v1/forecasts` | Generate a 5-, 20-, or 60-session forecast |
 | `POST` | `/api/v1/backtests` | Back-check predictions for the latest 7 sessions |
 | `POST` | `/api/v1/research/indexes/screen` | Rank up to 5 positive 20-session forecasts in a supported index |
+| `GET` | `/api/v1/tracking` | Load the SQLite-backed watchlist and paper portfolio |
+| `PUT` | `/api/v1/tracking` | Atomically replace saved tracking state |
 | `GET` | `/health/live` | Check the API process |
 | `GET` | `/health/ready` | Check whether TimesFM is loaded |
 
