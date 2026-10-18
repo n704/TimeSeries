@@ -18,17 +18,17 @@ from app.schemas import (
     ForecastRequest,
     ForecastResponse,
     HistoryResponse,
-    Nifty50ScreenMetadata,
-    Nifty50ScreenRequest,
-    Nifty50ScreenResponse,
-    Nifty50ScreenResult,
+    IndexScreenMetadata,
+    IndexScreenRequest,
+    IndexScreenResponse,
+    IndexScreenResult,
     SearchResponse,
 )
 from app.services.analysis import analyze_forecast
 from app.services.backtest import evaluate_backtest
 from app.services.calendar import TradingCalendar
 from app.services.forecast import ForecastModel
-from app.services.nifty50 import NIFTY50_SYMBOLS
+from app.services.indices import INDEX_UNIVERSES
 
 router = APIRouter(prefix="/api/v1")
 DISPLAY_PERIODS = {
@@ -46,12 +46,12 @@ BACKTEST_DISCLAIMER = (
     "This historical back-check measures one seven-session holdout and does not "
     "guarantee future forecasting performance or provide financial advice."
 )
-NIFTY50_SCREEN_DISCLAIMER = (
+INDEX_SCREEN_DISCLAIMER = (
     "This ranking compares positive TimesFM median forecast changes for research "
     "only. It does not consider valuation, fundamentals, news, liquidity, risk, "
     "or personal circumstances and is not a buy, sell, or hold recommendation."
 )
-NIFTY50_HISTORY_CONCURRENCY = 5
+INDEX_HISTORY_CONCURRENCY = 5
 
 
 def _provider(request: Request) -> MarketDataProvider:
@@ -169,16 +169,17 @@ async def create_forecast(
 
 
 @router.post(
-    "/research/nifty50/screen",
-    response_model=Nifty50ScreenResponse,
+    "/research/indexes/screen",
+    response_model=IndexScreenResponse,
 )
-async def screen_nifty50(
-    body: Nifty50ScreenRequest,
+async def screen_index(
+    body: IndexScreenRequest,
     request: Request,
-) -> Nifty50ScreenResponse:
+) -> IndexScreenResponse:
   _require_model_ready(request)
+  universe = INDEX_UNIVERSES[body.index_id]
   provider = _provider(request)
-  semaphore = asyncio.Semaphore(NIFTY50_HISTORY_CONCURRENCY)
+  semaphore = asyncio.Semaphore(INDEX_HISTORY_CONCURRENCY)
 
   async def load_history(symbol: str) -> tuple[str, HistoryData | None]:
     async with semaphore:
@@ -190,7 +191,7 @@ async def screen_nifty50(
         raise
 
   loaded = await asyncio.gather(
-      *(load_history(symbol) for symbol in NIFTY50_SYMBOLS)
+      *(load_history(symbol) for symbol in universe.symbols)
   )
   minimum = request.app.state.settings.min_history_observations
   histories: list[HistoryData] = []
@@ -203,8 +204,8 @@ async def screen_nifty50(
 
   if not histories:
     raise AppError(
-        "NIFTY50_SCREEN_UNAVAILABLE",
-        "No NIFTY 50 constituents have enough valid daily history to compare.",
+        "INDEX_SCREEN_UNAVAILABLE",
+        f"No {universe.name} constituents have enough valid daily history to compare.",
         status_code=422,
         details={
             "required_observations": minimum,
@@ -247,7 +248,7 @@ async def screen_nifty50(
 
   candidates.sort(key=lambda candidate: candidate[0], reverse=True)
   results = [
-      Nifty50ScreenResult(
+      IndexScreenResult(
           rank=rank,
           security=history.security,
           latest_close=history.prices[-1].adjusted_close,
@@ -270,11 +271,13 @@ async def screen_nifty50(
       ) in enumerate(candidates[:5], start=1)
   ]
   model = _model(request)
-  return Nifty50ScreenResponse(
+  return IndexScreenResponse(
       results=results,
-      metadata=Nifty50ScreenMetadata(
+      metadata=IndexScreenMetadata(
+          index_id=universe.index_id,
+          index_name=universe.name,
           horizon_trading_days=body.horizon,
-          universe_size=len(NIFTY50_SYMBOLS),
+          universe_size=len(universe.symbols),
           analyzed_count=len(histories),
           positive_count=len(candidates),
           unavailable_symbols=unavailable_symbols,
@@ -284,7 +287,7 @@ async def screen_nifty50(
           model_version=model.model_version,
           generated_at=datetime.now(UTC),
       ),
-      disclaimer=NIFTY50_SCREEN_DISCLAIMER,
+      disclaimer=INDEX_SCREEN_DISCLAIMER,
   )
 
 

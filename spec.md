@@ -106,8 +106,9 @@ the provider returns one unique active listing.
   which inputs it omits and that it is not a buy recommendation.
 - `FR-RESEARCH-05`: The dropdown uses all 50 constituents from a checked-in NSE
   Indices snapshot. It is not presented as a real-time index-membership feed.
-- `FR-RESEARCH-06`: The user can compare the selected 5-, 20-, or 60-session
-  horizon across all constituents with enough valid history.
+- `FR-RESEARCH-06`: The user can run a fixed 20-session comparison for NIFTY 50,
+  NIFTY NEXT 50, NIFTY MIDCAP SELECT, or NIFTY SMALLCAP 100 across all
+  constituents with enough valid history.
 - `FR-RESEARCH-07`: The comparison returns at most five constituents whose final
   median forecast is above the latest adjusted close, ordered by descending
   percentage change.
@@ -274,7 +275,8 @@ The MVP is a single-page application with these regions:
 6. **Results**
    - Trend summary.
    - Neutral model-screening label on the NIFTY 50 research tab.
-   - Top-five positive median comparison with coverage and uncertainty.
+   - Index selector and top-five positive 20-session median comparison with
+     coverage and uncertainty.
    - Metric cards: latest close, forecast end, forecast change, interval width.
    - Interactive historical price chart, enhanced with forecast and uncertainty
      visualizations after prediction.
@@ -762,23 +764,26 @@ Success, `200`:
 The response always contains exactly seven points. The context end date must
 precede the first returned point.
 
-### 10.5 Screen positive NIFTY 50 forecasts
+### 10.5 Screen positive index forecasts
 
-`POST /api/v1/research/nifty50/screen`
+`POST /api/v1/research/indexes/screen`
 
 Request:
 
 ```json
 {
+  "index_id": "nifty_next50",
   "horizon": 20
 }
 ```
 
+Supported `index_id` values are `nifty50`, `nifty_next50`,
+`nifty_midcap_select`, and `nifty_smallcap100`. The horizon is fixed at 20.
 The response contains zero to five results ordered by positive median forecast
-change. Metadata includes the universe size, analyzed count, positive count,
-and symbols unavailable because provider data was missing, unsupported, or too
-short. Each result includes latest close, forecast end, end date, p10, p50, p90,
-interval width, and data freshness.
+change. Metadata includes the selected index name, universe size, analyzed
+count, positive count, and symbols unavailable because provider data was
+missing, unsupported, or too short. Each result includes latest close, forecast
+end, end date, p10, p50, p90, interval width, and data freshness.
 
 This endpoint is a neutral research screen. It does not produce a buy, sell, or
 hold recommendation.

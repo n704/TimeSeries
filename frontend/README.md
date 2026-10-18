@@ -53,8 +53,8 @@ market-data credentials, model credentials, or checkpoint paths.
    **Predict selected stock**.
 4. Review the neutral model-screening signal, price range, uncertainty, metadata,
    and disclaimer. The signal is not a buy recommendation.
-5. Optionally compare all available NIFTY 50 constituents and view up to five
-   positive median forecast changes for the selected horizon.
+5. Optionally select NIFTY 50, NIFTY NEXT 50, NIFTY MIDCAP SELECT, or NIFTY
+   SMALLCAP 100 and view up to five positive 20-session median forecast changes.
 6. Optionally change the display range, moving-average overlays, or forecast
    horizon.
 7. Optionally back-check the model against the latest seven known sessions.
@@ -74,7 +74,7 @@ Index membership can change during scheduled reviews.
   chosen in the dropdown.
 - Range changes affect historical display but not the forecast horizon.
 - Forecast success moves keyboard focus to the result heading.
-- NIFTY 50 comparison success moves keyboard focus to its result heading.
+- Index comparison success moves keyboard focus to its result heading.
 - Back-check success moves keyboard focus to its result heading.
 - A symbol change aborts both forecast and back-check requests.
 

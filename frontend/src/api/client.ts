@@ -5,7 +5,8 @@ import type {
   ForecastResponse,
   HistoryRange,
   HistoryResponse,
-  Nifty50ScreenResponse,
+  IndexScreenResponse,
+  ResearchIndexId,
   Security,
 } from "../types";
 
@@ -95,13 +96,13 @@ export function createBacktest(
   });
 }
 
-export function screenNifty50(
-  horizon: ForecastHorizon,
+export function screenIndex(
+  indexId: ResearchIndexId,
   signal: AbortSignal,
-): Promise<Nifty50ScreenResponse> {
-  return request("/research/nifty50/screen", {
+): Promise<IndexScreenResponse> {
+  return request("/research/indexes/screen", {
     method: "POST",
-    body: JSON.stringify({ horizon }),
+    body: JSON.stringify({ index_id: indexId, horizon: 20 }),
     signal,
   });
 }

@@ -13,7 +13,7 @@ const apiMocks = vi.hoisted(() => ({
   createBacktest: vi.fn(),
   createForecast: vi.fn(),
   getHistory: vi.fn(),
-  screenNifty50: vi.fn(),
+  screenIndex: vi.fn(),
   searchSecurities: vi.fn(),
 }));
 
@@ -104,7 +104,7 @@ const forecastResponse = {
   disclaimer: "Not financial advice.",
 };
 
-const niftyScreenResponse = {
+const indexScreenResponse = {
   results: Array.from({ length: 5 }, (_, index) => ({
     rank: index + 1,
     security: {
@@ -123,9 +123,11 @@ const niftyScreenResponse = {
     is_data_stale: false,
   })),
   metadata: {
+    index_id: "nifty_midcap_select",
+    index_name: "NIFTY MIDCAP SELECT",
     horizon_trading_days: 20,
-    universe_size: 50,
-    analyzed_count: 48,
+    universe_size: 25,
+    analyzed_count: 23,
     positive_count: 17,
     unavailable_symbols: ["BSE.NS", "TMPV.NS"],
     provider: "Fixture",
@@ -142,7 +144,7 @@ describe("App", () => {
     vi.clearAllMocks();
     apiMocks.getHistory.mockResolvedValue(historyResponse);
     apiMocks.createForecast.mockResolvedValue(forecastResponse);
-    apiMocks.screenNifty50.mockResolvedValue(niftyScreenResponse);
+    apiMocks.screenIndex.mockResolvedValue(indexScreenResponse);
   });
 
   it("defaults to NIFTY 50 research and automatically forecasts Reliance", async () => {
@@ -272,21 +274,25 @@ describe("App", () => {
     await waitFor(() => expect(apiMocks.createForecast).toHaveBeenCalledTimes(2));
   });
 
-  it("ranks the top five positive NIFTY 50 forecasts", async () => {
+  it("ranks the selected index over 20 sessions", async () => {
     render(<App />);
+    fireEvent.change(
+      screen.getByRole("combobox", { name: /index universe/i }),
+      { target: { value: "nifty_midcap_select" } },
+    );
     const screenButton = screen.getByRole("button", {
-      name: /find top 5 positive forecasts/i,
+      name: /find top 5 for 20 sessions/i,
     });
     await waitFor(() => expect(screenButton).toBeEnabled());
 
     fireEvent.click(screenButton);
 
-    expect(apiMocks.screenNifty50).toHaveBeenCalledWith(
-      20,
+    expect(apiMocks.screenIndex).toHaveBeenCalledWith(
+      "nifty_midcap_select",
       expect.any(AbortSignal),
     );
     const heading = await screen.findByRole("heading", {
-      name: /top positive nifty 50 forecasts/i,
+      name: /top positive nifty midcap select forecasts/i,
     });
     expect(
       screen.getByRole("table", {
@@ -294,7 +300,7 @@ describe("App", () => {
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("+10.00%")).toBeInTheDocument();
-    expect(screen.getByText(/analyzed 48 of 50 constituents/i)).toBeInTheDocument();
+    expect(screen.getByText(/analyzed 23 of 25 constituents/i)).toBeInTheDocument();
     expect(screen.getByText(/not analyzed: BSE.NS, TMPV.NS/i)).toBeInTheDocument();
     expect(screen.getByText(/not a buy, sell, or hold recommendation/i)).toBeInTheDocument();
     await waitFor(() => expect(heading).toHaveFocus());

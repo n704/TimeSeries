@@ -472,6 +472,27 @@ legend { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
 .forecast-panel .eyebrow { margin-bottom: 7px; }
 .backtest-panel { align-items: flex-end; }
 .screen-panel { align-items: flex-end; }
+.screen-actions {
+  min-width: min(360px, 100%);
+  display: grid;
+  gap: 10px;
+}
+.screen-actions label span {
+  display: block;
+  margin-bottom: 6px;
+  color: #b9c3d6;
+  font-size: 12px;
+  font-weight: 600;
+}
+.screen-actions select {
+  width: 100%;
+  min-height: 46px;
+  padding: 8px 12px;
+  color: #f2f5fb;
+  border: 1px solid #34425d;
+  border-radius: 10px;
+  background: #0a1120;
+}
 .backtest-copy {
   max-width: 680px;
   margin: 9px 0 0;
@@ -667,6 +688,7 @@ footer p { margin: 0; }
   .forecast-actions .primary-button,
   .backtest-panel .primary-button,
   .screen-panel .primary-button { width: 100%; }
+  .screen-actions { width: 100%; }
   .metric-grid { grid-template-columns: repeat(2, 1fr); }
   .details-grid { grid-template-columns: 1fr; }
 }

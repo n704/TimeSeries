@@ -5,7 +5,7 @@ import {
   createBacktest,
   createForecast,
   getHistory,
-  screenNifty50,
+  screenIndex,
   searchSecurities,
 } from "./api/client";
 import { PriceChart } from "./components/PriceChart";
@@ -16,12 +16,19 @@ import type {
   ForecastResponse,
   HistoryRange,
   HistoryResponse,
-  Nifty50ScreenResponse,
+  IndexScreenResponse,
+  ResearchIndexId,
   Security,
 } from "./types";
 
 const ranges: HistoryRange[] = ["6m", "1y", "2y", "5y"];
 const horizons: ForecastHorizon[] = [5, 20, 60];
+const researchIndices: { id: ResearchIndexId; name: string }[] = [
+  { id: "nifty50", name: "NIFTY 50" },
+  { id: "nifty_next50", name: "NIFTY NEXT 50" },
+  { id: "nifty_midcap_select", name: "NIFTY MIDCAP SELECT" },
+  { id: "nifty_smallcap100", name: "NIFTY SMALLCAP 100" },
+];
 
 type AppTab = "research" | "explore";
 
@@ -117,6 +124,8 @@ export default function App() {
   const resultFocusTimeoutRef = useRef<number | null>(null);
   const [activeTab, setActiveTab] = useState<AppTab>("research");
   const [researchSymbol, setResearchSymbol] = useState(defaultNiftySecurity.symbol);
+  const [researchIndexId, setResearchIndexId] =
+    useState<ResearchIndexId>("nifty50");
   const [query, setQuery] = useState("");
   const [searchResults, setSearchResults] = useState<Security[]>([]);
   const [searching, setSearching] = useState(false);
@@ -129,11 +138,11 @@ export default function App() {
   const [history, setHistory] = useState<HistoryResponse | null>(null);
   const [forecast, setForecast] = useState<ForecastResponse | null>(null);
   const [backtest, setBacktest] = useState<BacktestResponse | null>(null);
-  const [niftyScreen, setNiftyScreen] = useState<Nifty50ScreenResponse | null>(null);
+  const [indexScreen, setIndexScreen] = useState<IndexScreenResponse | null>(null);
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [forecasting, setForecasting] = useState(false);
   const [backtesting, setBacktesting] = useState(false);
-  const [screeningNifty, setScreeningNifty] = useState(false);
+  const [screeningIndex, setScreeningIndex] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showMovingAverages, setShowMovingAverages] = useState(false);
 
@@ -285,7 +294,7 @@ export default function App() {
     }
   }
 
-  async function runNifty50Screen() {
+  async function runIndexScreen() {
     if (resultFocusTimeoutRef.current !== null) {
       window.clearTimeout(resultFocusTimeoutRef.current);
       resultFocusTimeoutRef.current = null;
@@ -293,12 +302,12 @@ export default function App() {
     screenRequestRef.current?.abort();
     const controller = new AbortController();
     screenRequestRef.current = controller;
-    setScreeningNifty(true);
+    setScreeningIndex(true);
     setError(null);
     try {
-      const result = await screenNifty50(horizon, controller.signal);
+      const result = await screenIndex(researchIndexId, controller.signal);
       if (screenRequestRef.current === controller && !controller.signal.aborted) {
-        setNiftyScreen(result);
+        setIndexScreen(result);
         scheduleResultFocus(() => screenHeadingRef.current?.focus());
       }
     } catch (screenError) {
@@ -306,7 +315,7 @@ export default function App() {
     } finally {
       if (screenRequestRef.current === controller) {
         screenRequestRef.current = null;
-        setScreeningNifty(false);
+        setScreeningIndex(false);
       }
     }
   }
@@ -432,7 +441,7 @@ export default function App() {
                     autoForecastSymbol !== null ||
                     forecasting ||
                     backtesting ||
-                    screeningNifty
+                    screeningIndex
                   }
                 >
                   {loadingHistory && selected?.symbol === researchSymbol
@@ -531,7 +540,7 @@ export default function App() {
         {selected && (
           <section
             className="workspace"
-            aria-busy={loadingHistory || forecasting || backtesting || screeningNifty}
+            aria-busy={loadingHistory || forecasting || backtesting || screeningIndex}
           >
             <div className="security-heading">
               <div>
@@ -620,7 +629,7 @@ export default function App() {
                     autoForecastSymbol !== null ||
                     forecasting ||
                     backtesting ||
-                    screeningNifty
+                    screeningIndex
                   }
                 >
                   {forecasting ? <><span className="spinner small" /> Forecasting…</> : "Generate forecast"}
@@ -631,35 +640,51 @@ export default function App() {
             {activeTab === "research" && (
               <div className="forecast-panel screen-panel">
                 <div>
-                  <p className="eyebrow">NIFTY 50 COMPARISON</p>
-                  <h3>Find the strongest positive median forecasts</h3>
+                  <p className="eyebrow">INDEX UNIVERSE COMPARISON</p>
+                  <h3>Find the strongest positive 20-session forecasts</h3>
                   <p className="backtest-copy">
-                    Compare all available constituents over the selected horizon
-                    and rank up to five positive percentage changes.
+                    Choose an index universe and rank up to five constituents by
+                    positive median percentage change.
                   </p>
                 </div>
-                <button
-                  type="button"
-                  className="primary-button secondary"
-                  onClick={runNifty50Screen}
-                  disabled={
-                    loadingHistory ||
-                    autoForecastSymbol !== null ||
-                    forecasting ||
-                    backtesting ||
-                    screeningNifty
-                  }
-                >
-                  {screeningNifty ? (
-                    <><span className="spinner small" /> Comparing 50 stocks...</>
-                  ) : (
-                    "Find top 5 positive forecasts"
-                  )}
-                </button>
+                <div className="screen-actions">
+                  <label>
+                    <span>Index universe</span>
+                    <select
+                      value={researchIndexId}
+                      onChange={(event) => {
+                        setResearchIndexId(event.target.value as ResearchIndexId);
+                        setIndexScreen(null);
+                      }}
+                    >
+                      {researchIndices.map((index) => (
+                        <option key={index.id} value={index.id}>{index.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    className="primary-button secondary"
+                    onClick={runIndexScreen}
+                    disabled={
+                      loadingHistory ||
+                      autoForecastSymbol !== null ||
+                      forecasting ||
+                      backtesting ||
+                      screeningIndex
+                    }
+                  >
+                    {screeningIndex ? (
+                      <><span className="spinner small" /> Comparing index...</>
+                    ) : (
+                      "Find top 5 for 20 sessions"
+                    )}
+                  </button>
+                </div>
               </div>
             )}
 
-            {activeTab === "research" && niftyScreen && (
+            {activeTab === "research" && indexScreen && (
               <section className="results nifty-screen-results" aria-labelledby="nifty-screen-heading">
                 <div className="result-intro">
                   <p className="trend-chip upward">Positive median screen</p>
@@ -668,21 +693,21 @@ export default function App() {
                     ref={screenHeadingRef}
                     tabIndex={-1}
                   >
-                    Top positive NIFTY 50 forecasts
+                    Top positive {indexScreen.metadata.index_name} forecasts
                   </h2>
                   <p>
-                    Analyzed {niftyScreen.metadata.analyzed_count} of{" "}
-                    {niftyScreen.metadata.universe_size} constituents for the next{" "}
-                    {niftyScreen.metadata.horizon_trading_days} trading sessions;{" "}
-                    {niftyScreen.metadata.positive_count} had a positive median change.
+                    Analyzed {indexScreen.metadata.analyzed_count} of{" "}
+                    {indexScreen.metadata.universe_size} constituents for the next{" "}
+                    {indexScreen.metadata.horizon_trading_days} trading sessions;{" "}
+                    {indexScreen.metadata.positive_count} had a positive median change.
                   </p>
                 </div>
-                {niftyScreen.metadata.unavailable_symbols.length > 0 && (
+                {indexScreen.metadata.unavailable_symbols.length > 0 && (
                   <p className="screen-coverage-note">
-                    Not analyzed: {niftyScreen.metadata.unavailable_symbols.join(", ")}.
+                    Not analyzed: {indexScreen.metadata.unavailable_symbols.join(", ")}.
                   </p>
                 )}
-                {niftyScreen.results.length ? (
+                {indexScreen.results.length ? (
                   <div className="forecast-details screen-table">
                     <div className="table-scroll">
                       <table>
@@ -699,7 +724,7 @@ export default function App() {
                           </tr>
                         </thead>
                         <tbody>
-                          {niftyScreen.results.map((result) => (
+                          {indexScreen.results.map((result) => (
                             <tr key={result.security.symbol}>
                               <td>{result.rank}</td>
                               <td>
@@ -741,7 +766,7 @@ export default function App() {
                     No constituent had a positive median change for this horizon.
                   </p>
                 )}
-                <p className="disclaimer">{niftyScreen.disclaimer}</p>
+                <p className="disclaimer">{indexScreen.disclaimer}</p>
               </section>
             )}
 
@@ -784,7 +809,7 @@ export default function App() {
                   autoForecastSymbol !== null ||
                   forecasting ||
                   backtesting ||
-                  screeningNifty
+                  screeningIndex
                 }
               >
                 {backtesting ? (
@@ -945,8 +970,8 @@ export default function App() {
         <p>Daily NSE and BSE stock forecasts only · Not financial advice.</p>
       </footer>
       <div className="sr-only" aria-live="polite">
-        {screeningNifty
-          ? "Comparing NIFTY 50 forecasts"
+        {screeningIndex
+          ? "Comparing index forecasts"
           : backtesting
           ? "Running historical back-check"
           : forecasting
@@ -955,8 +980,8 @@ export default function App() {
               ? "Historical back-check complete"
               : forecast
                 ? "Forecast complete"
-                : niftyScreen
-                  ? "NIFTY 50 comparison complete"
+                : indexScreen
+                  ? "Index comparison complete"
                   : ""}
       </div>
     </div>

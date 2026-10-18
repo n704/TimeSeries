@@ -93,11 +93,17 @@ class ForecastResponse(BaseModel):
   disclaimer: str
 
 
-class Nifty50ScreenRequest(BaseModel):
-  horizon: Literal[5, 20, 60] = 20
+class IndexScreenRequest(BaseModel):
+  index_id: Literal[
+      "nifty50",
+      "nifty_next50",
+      "nifty_midcap_select",
+      "nifty_smallcap100",
+  ] = "nifty50"
+  horizon: Literal[20] = 20
 
 
-class Nifty50ScreenResult(BaseModel):
+class IndexScreenResult(BaseModel):
   rank: int = Field(ge=1, le=5)
   security: Security
   latest_close: float = Field(gt=0)
@@ -111,7 +117,9 @@ class Nifty50ScreenResult(BaseModel):
   is_data_stale: bool
 
 
-class Nifty50ScreenMetadata(BaseModel):
+class IndexScreenMetadata(BaseModel):
+  index_id: str
+  index_name: str
   horizon_trading_days: int
   universe_size: int
   analyzed_count: int
@@ -124,9 +132,9 @@ class Nifty50ScreenMetadata(BaseModel):
   generated_at: datetime
 
 
-class Nifty50ScreenResponse(BaseModel):
-  results: list[Nifty50ScreenResult]
-  metadata: Nifty50ScreenMetadata
+class IndexScreenResponse(BaseModel):
+  results: list[IndexScreenResult]
+  metadata: IndexScreenMetadata
   disclaimer: str
 
 

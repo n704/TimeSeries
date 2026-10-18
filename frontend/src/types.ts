@@ -66,7 +66,13 @@ export interface ForecastResponse {
   disclaimer: string;
 }
 
-export interface Nifty50ScreenResult {
+export type ResearchIndexId =
+  | "nifty50"
+  | "nifty_next50"
+  | "nifty_midcap_select"
+  | "nifty_smallcap100";
+
+export interface IndexScreenResult {
   rank: number;
   security: Security;
   latest_close: number;
@@ -80,9 +86,11 @@ export interface Nifty50ScreenResult {
   is_data_stale: boolean;
 }
 
-export interface Nifty50ScreenResponse {
-  results: Nifty50ScreenResult[];
+export interface IndexScreenResponse {
+  results: IndexScreenResult[];
   metadata: {
+    index_id: ResearchIndexId;
+    index_name: string;
     horizon_trading_days: number;
     universe_size: number;
     analyzed_count: number;

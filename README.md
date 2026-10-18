@@ -183,7 +183,7 @@ The readiness endpoint returns `503` until TimesFM has loaded.
 | `GET` | `/api/v1/securities/RELIANCE.NS/history?range=1y` | Load adjusted-close history |
 | `POST` | `/api/v1/forecasts` | Generate a 5-, 20-, or 60-session forecast |
 | `POST` | `/api/v1/backtests` | Back-check predictions for the latest 7 sessions |
-| `POST` | `/api/v1/research/nifty50/screen` | Rank up to 5 positive NIFTY 50 median forecasts |
+| `POST` | `/api/v1/research/indexes/screen` | Rank up to 5 positive 20-session forecasts in a supported index |
 | `GET` | `/health/live` | Check the API process |
 | `GET` | `/health/ready` | Check whether TimesFM is loaded |
 
@@ -207,17 +207,18 @@ The back-check hides the latest seven adjusted closes, predicts them using only
 earlier observations, and reports median-error and p10-p90 coverage metrics.
 It is a single historical holdout, not a guarantee of future accuracy.
 
-Example NIFTY 50 research screen:
+Example index research screen:
 
 ```bash
-curl -X POST http://localhost:8000/api/v1/research/nifty50/screen \
+curl -X POST http://localhost:8000/api/v1/research/indexes/screen \
   -H 'Content-Type: application/json' \
-  -d '{"horizon":20}'
+  -d '{"index_id":"nifty_next50","horizon":20}'
 ```
 
-The screen compares available constituents in one TimesFM batch and returns up
-to five positive median percentage changes with p10-p90 uncertainty. It is a
-research ranking, not a buy, sell, or hold recommendation.
+The screen supports NIFTY 50, NIFTY NEXT 50, NIFTY MIDCAP SELECT, and NIFTY
+SMALLCAP 100. It compares available constituents in one TimesFM batch and
+returns up to five positive 20-session median percentage changes with p10-p90
+uncertainty. It is a research ranking, not a buy, sell, or hold recommendation.
 
 ## Market-data scope
 
