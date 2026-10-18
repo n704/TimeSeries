@@ -61,6 +61,10 @@ cp .env.example .env
 Set `TIMESFM_CHECKPOINT_PATH` to the absolute local directory. Never commit
 `.env`, Hugging Face credentials, or model files.
 
+For the optional Docker Compose workflow, set
+`TIMESFM_CHECKPOINT_HOST_PATH` to that same absolute directory. Compose mounts
+it read-only and overrides the in-container checkpoint path.
+
 ### 5. Validate
 
 ```bash
@@ -73,6 +77,18 @@ npm run build
 ```
 
 ### 6. Start
+
+Recommended single command:
+
+```bash
+uv run --project backend python scripts/start_services.py
+```
+
+The Python supervisor validates the TimesFM checkpoint, starts backend and
+frontend processes, forwards termination signals, and stops both when either
+service exits.
+
+Manual alternative:
 
 Backend:
 
@@ -90,7 +106,31 @@ npm run dev
 
 Use `--reload` only for active development.
 
-### 7. Health checks
+### 7. Optional Docker Compose development stack
+
+```bash
+docker compose up --build
+```
+
+The stack:
+
+- builds separate development images for FastAPI and Vite;
+- bind-mounts source for reload behavior;
+- bind-mounts `TIMESFM_CHECKPOINT_HOST_PATH` read-only at `/models/timesfm`;
+- uses the PyTorch CPU backend because Linux containers cannot use macOS MLX;
+- exposes the same local ports, 8000 and 5173.
+
+Stop and remove the development containers with:
+
+```bash
+docker compose down
+```
+
+Do not publish these images or use this Compose file as a production design.
+The downloaded TimesFM evaluation weights remain subject to their
+non-production restrictions and must never be copied into an image.
+
+### 8. Health checks
 
 ```bash
 curl --fail http://127.0.0.1:8000/health/live

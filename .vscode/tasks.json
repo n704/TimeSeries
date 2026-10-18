@@ -32,12 +32,9 @@
       "inAgents": true
     },
     {
-      "label": "Start application",
-      "dependsOn": [
-        "Start backend",
-        "Start frontend"
-      ],
-      "dependsOrder": "parallel",
+      "label": "Start all services",
+      "type": "shell",
+      "command": "uv run --project backend python scripts/start_services.py",
       "problemMatcher": [],
       "inAgents": true
     }

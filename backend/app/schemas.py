@@ -93,6 +93,51 @@ class ForecastResponse(BaseModel):
   disclaimer: str
 
 
+class IndexScreenRequest(BaseModel):
+  index_id: Literal[
+      "nifty50",
+      "nifty_next50",
+      "nifty_midcap_select",
+      "nifty_smallcap100",
+  ] = "nifty50"
+  horizon: Literal[20] = 20
+
+
+class IndexScreenResult(BaseModel):
+  rank: int = Field(ge=1, le=5)
+  security: Security
+  latest_close: float = Field(gt=0)
+  forecast_end: float = Field(gt=0)
+  forecast_change_percent: float = Field(gt=0)
+  forecast_end_date: date
+  final_p10: float = Field(gt=0)
+  final_p50: float = Field(gt=0)
+  final_p90: float = Field(gt=0)
+  final_interval_width_percent: float = Field(ge=0)
+  is_data_stale: bool
+
+
+class IndexScreenMetadata(BaseModel):
+  index_id: str
+  index_name: str
+  horizon_trading_days: int
+  universe_size: int
+  analyzed_count: int
+  positive_count: int
+  unavailable_symbols: list[str]
+  provider: str
+  backend: str
+  model: str
+  model_version: str
+  generated_at: datetime
+
+
+class IndexScreenResponse(BaseModel):
+  results: list[IndexScreenResult]
+  metadata: IndexScreenMetadata
+  disclaimer: str
+
+
 class BacktestRequest(SecurityRequest):
   pass
 

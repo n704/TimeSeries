@@ -13,6 +13,7 @@ const apiMocks = vi.hoisted(() => ({
   createBacktest: vi.fn(),
   createForecast: vi.fn(),
   getHistory: vi.fn(),
+  screenIndex: vi.fn(),
   searchSecurities: vi.fn(),
 }));
 
@@ -103,11 +104,47 @@ const forecastResponse = {
   disclaimer: "Not financial advice.",
 };
 
+const indexScreenResponse = {
+  results: Array.from({ length: 5 }, (_, index) => ({
+    rank: index + 1,
+    security: {
+      ...security,
+      symbol: `STOCK${index + 1}.NS`,
+      name: `Stock ${index + 1}`,
+    },
+    latest_close: 100,
+    forecast_end: 110 - index,
+    forecast_change_percent: 10 - index,
+    forecast_end_date: "2026-11-16",
+    final_p10: 95,
+    final_p50: 110 - index,
+    final_p90: 120,
+    final_interval_width_percent: 22.73,
+    is_data_stale: false,
+  })),
+  metadata: {
+    index_id: "nifty_midcap_select",
+    index_name: "NIFTY MIDCAP SELECT",
+    horizon_trading_days: 20,
+    universe_size: 25,
+    analyzed_count: 23,
+    positive_count: 17,
+    unavailable_symbols: ["BSE.NS", "TMPV.NS"],
+    provider: "Fixture",
+    backend: "fixture",
+    model: "fixture-timesfm",
+    model_version: "test",
+    generated_at: "2026-10-18T00:00:00Z",
+  },
+  disclaimer: "Research screen only; not a buy, sell, or hold recommendation.",
+};
+
 describe("App", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     apiMocks.getHistory.mockResolvedValue(historyResponse);
     apiMocks.createForecast.mockResolvedValue(forecastResponse);
+    apiMocks.screenIndex.mockResolvedValue(indexScreenResponse);
   });
 
   it("defaults to NIFTY 50 research and automatically forecasts Reliance", async () => {
@@ -235,6 +272,38 @@ describe("App", () => {
 
     await waitFor(() => expect(apiMocks.getHistory).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(apiMocks.createForecast).toHaveBeenCalledTimes(2));
+  });
+
+  it("ranks the selected index over 20 sessions", async () => {
+    render(<App />);
+    fireEvent.change(
+      screen.getByRole("combobox", { name: /index universe/i }),
+      { target: { value: "nifty_midcap_select" } },
+    );
+    const screenButton = screen.getByRole("button", {
+      name: /find top 5 for 20 sessions/i,
+    });
+    await waitFor(() => expect(screenButton).toBeEnabled());
+
+    fireEvent.click(screenButton);
+
+    expect(apiMocks.screenIndex).toHaveBeenCalledWith(
+      "nifty_midcap_select",
+      expect.any(AbortSignal),
+    );
+    const heading = await screen.findByRole("heading", {
+      name: /top positive nifty midcap select forecasts/i,
+    });
+    expect(
+      screen.getByRole("table", {
+        name: /highest positive timesfm median changes/i,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("+10.00%")).toBeInTheDocument();
+    expect(screen.getByText(/analyzed 23 of 25 constituents/i)).toBeInTheDocument();
+    expect(screen.getByText(/not analyzed: BSE.NS, TMPV.NS/i)).toBeInTheDocument();
+    expect(screen.getByText(/not a buy, sell, or hold recommendation/i)).toBeInTheDocument();
+    await waitFor(() => expect(heading).toHaveFocus());
   });
 
   it("shows available and required trading days when forecast history is insufficient", async () => {

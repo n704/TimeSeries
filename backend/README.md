@@ -130,6 +130,22 @@ predicts those seven sessions using only the earlier context, and returns the
 actual and p10/p50/p90 values. It also reports mean absolute error, mean
 absolute percentage error, and p10-p90 interval coverage.
 
+### Index positive forecast screen
+
+```http
+POST /api/v1/research/indexes/screen
+Content-Type: application/json
+
+{"index_id":"nifty_smallcap100","horizon":20}
+```
+
+The endpoint loads five years of daily adjusted closes for the selected
+checked-in index snapshot, runs one TimesFM batch, and returns up to five
+constituents with the highest positive 20-session median percentage changes.
+Supported universes are NIFTY 50, NIFTY NEXT 50, NIFTY MIDCAP SELECT, and NIFTY
+SMALLCAP 100. The response reports the analyzed and unavailable symbols plus
+final p10-p90 uncertainty. It is not an investment recommendation.
+
 ## Data and model flow
 
 1. Fetch up to five years of adjusted daily close data.
@@ -159,6 +175,7 @@ Tests cover:
 - endpoint success and error contracts;
 - insufficient history;
 - seven-session holdout isolation and metrics;
+- multi-index batch screening and positive 20-session ranking;
 - application startup cleanup;
 - local adapter checkpoint requirements;
 - decile-to-p10/p50/p90 mapping.

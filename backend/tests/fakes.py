@@ -33,8 +33,18 @@ class FakeMarketDataProvider:
 
   async def history(self, symbol: str, period: str) -> HistoryData:
     self.history_calls += 1
+    security = self.security.model_copy(
+        update={
+            "symbol": symbol,
+            "name": (
+                self.security.name
+                if symbol == self.security.symbol
+                else symbol.removesuffix(".NS")
+            ),
+        }
+    )
     return HistoryData(
-        security=self.security,
+        security=security,
         prices=self.prices,
         metadata=HistoryMetadata(
             provider="Fixture",
@@ -64,6 +74,13 @@ class FakeForecastModel:
         p50=medians,
         p90=[value * 1.05 for value in medians],
     )
+
+  async def predict_batch(
+      self,
+      contexts: list[np.ndarray],
+      horizon: int,
+  ) -> list[ModelForecast]:
+    return [await self.predict(context, horizon) for context in contexts]
 
 
 class FakeTradingCalendar:

@@ -147,7 +147,21 @@ npm run build
 
 ## 6. Run the application
 
-Use two terminals from the repository root.
+Start both local services from the repository root:
+
+```bash
+uv run --project backend python scripts/start_services.py
+```
+
+The supervisor validates `uv`, `npm`, and the configured TimesFM checkpoint,
+starts both processes, and stops the other service if either process exits.
+Validate prerequisites without starting anything:
+
+```bash
+uv run --project backend python scripts/start_services.py --check
+```
+
+Alternatively, use two terminals.
 
 Backend:
 
@@ -175,6 +189,25 @@ curl http://localhost:8000/health/ready
 
 The readiness endpoint returns `503` until TimesFM has loaded.
 
+### Docker Compose development stack
+
+Set `TIMESFM_CHECKPOINT_HOST_PATH` in `.env` to the same absolute checkpoint
+directory used by `TIMESFM_CHECKPOINT_PATH`, then run:
+
+```bash
+docker compose up --build
+```
+
+Open [http://localhost:5173](http://localhost:5173). Stop the stack with:
+
+```bash
+docker compose down
+```
+
+Compose bind-mounts the checkpoint read-only at `/models/timesfm`; it never
+copies model weights into an image. The Linux backend uses PyTorch CPU because
+MLX is macOS-only. This stack is for local evaluation, not production.
+
 ## API summary
 
 | Method | Endpoint | Purpose |
@@ -183,6 +216,7 @@ The readiness endpoint returns `503` until TimesFM has loaded.
 | `GET` | `/api/v1/securities/RELIANCE.NS/history?range=1y` | Load adjusted-close history |
 | `POST` | `/api/v1/forecasts` | Generate a 5-, 20-, or 60-session forecast |
 | `POST` | `/api/v1/backtests` | Back-check predictions for the latest 7 sessions |
+| `POST` | `/api/v1/research/indexes/screen` | Rank up to 5 positive 20-session forecasts in a supported index |
 | `GET` | `/health/live` | Check the API process |
 | `GET` | `/health/ready` | Check whether TimesFM is loaded |
 
@@ -205,6 +239,19 @@ curl -X POST http://localhost:8000/api/v1/backtests \
 The back-check hides the latest seven adjusted closes, predicts them using only
 earlier observations, and reports median-error and p10-p90 coverage metrics.
 It is a single historical holdout, not a guarantee of future accuracy.
+
+Example index research screen:
+
+```bash
+curl -X POST http://localhost:8000/api/v1/research/indexes/screen \
+  -H 'Content-Type: application/json' \
+  -d '{"index_id":"nifty_next50","horizon":20}'
+```
+
+The screen supports NIFTY 50, NIFTY NEXT 50, NIFTY MIDCAP SELECT, and NIFTY
+SMALLCAP 100. It compares available constituents in one TimesFM batch and
+returns up to five positive 20-session median percentage changes with p10-p90
+uncertainty. It is a research ranking, not a buy, sell, or hold recommendation.
 
 ## Market-data scope
 

@@ -5,6 +5,8 @@ import type {
   ForecastResponse,
   HistoryRange,
   HistoryResponse,
+  IndexScreenResponse,
+  ResearchIndexId,
   Security,
 } from "../types";
 
@@ -90,6 +92,17 @@ export function createBacktest(
   return request("/backtests", {
     method: "POST",
     body: JSON.stringify({ symbol }),
+    signal,
+  });
+}
+
+export function screenIndex(
+  indexId: ResearchIndexId,
+  signal: AbortSignal,
+): Promise<IndexScreenResponse> {
+  return request("/research/indexes/screen", {
+    method: "POST",
+    body: JSON.stringify({ index_id: indexId, horizon: 20 }),
     signal,
   });
 }
