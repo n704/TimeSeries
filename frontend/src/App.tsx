@@ -353,10 +353,16 @@ export default function App() {
     <div className="app-shell">
       <header className="site-header">
         <a className="brand" href="/" aria-label="TimeSeries Forecast Lab home">
-          <span className="brand-mark" aria-hidden="true">T</span>
-          <span>TimeSeries <b>Forecast Lab</b></span>
+          <span className="brand-mark" aria-hidden="true">₹</span>
+          <span className="brand-copy">
+            <b>TimeSeries</b>
+            <small>Forecast Lab</small>
+          </span>
         </a>
-        <span className="mode-badge">Local TimesFM</span>
+        <span className="mode-badge">
+          <span className="mode-dot" aria-hidden="true" />
+          Local TimesFM
+        </span>
       </header>
 
       <main>
@@ -399,18 +405,25 @@ export default function App() {
             role="tabpanel"
             aria-labelledby="research-tab"
           >
-            <p className="eyebrow">NIFTY 50 RESEARCH</p>
-            <h1>Research all <span>NIFTY 50 stocks.</span></h1>
-            <p className="hero-copy">
-              Reliance is selected by default and its 20-session TimesFM forecast
-              starts automatically. Choose any constituent from the dropdown,
-              then run its prediction.
-            </p>
+            <div className="research-intro">
+              <p className="eyebrow">NIFTY 50 RESEARCH</p>
+              <h1>Research all <span>NIFTY 50 stocks.</span></h1>
+              <p className="hero-copy">
+                Compare price history with a probabilistic TimesFM outlook. Start
+                with Reliance or choose another index constituent.
+              </p>
+              <div className="hero-proof" aria-label="Research coverage">
+                <span><b>50</b> index leaders</span>
+                <span><b>3</b> forecast horizons</span>
+                <span><b>p10-p90</b> uncertainty</span>
+              </div>
+            </div>
             <section className="constituent-panel" aria-labelledby="constituent-heading">
               <div className="constituent-heading">
                 <div>
+                  <p className="step-label">01 · CHOOSE A SECURITY</p>
                   <h2 id="constituent-heading">Predict a NIFTY 50 stock</h2>
-                  <p>50 constituents available</p>
+                  <p>The 20-session forecast runs automatically.</p>
                 </div>
               </div>
               <form
@@ -428,7 +441,7 @@ export default function App() {
                   >
                     {nifty50Constituents.map((security) => (
                       <option key={security.symbol} value={security.symbol}>
-                        {security.name} ({security.symbol.replace(".NS", "")})
+                        {security.symbol.replace(".NS", "")} — {security.name}
                       </option>
                     ))}
                   </select>
@@ -546,7 +559,12 @@ export default function App() {
               <div>
                 <p className="ticker">{selected.symbol} · {selected.exchange}</p>
                 <h2>{selected.name}</h2>
-                {latest && <p className="latest-price">{formatPrice(latest.adjusted_close, currency)}</p>}
+                {latest && (
+                  <p className="latest-price">
+                    <span>Latest adjusted close</span>
+                    <strong>{formatPrice(latest.adjusted_close, currency)}</strong>
+                  </p>
+                )}
               </div>
               <div className="freshness">
                 <span className="status-dot" />
@@ -554,9 +572,67 @@ export default function App() {
               </div>
             </div>
 
-            <div className="control-row">
+            {forecast && (
+              <section className="forecast-overview" aria-labelledby="forecast-result">
+                <div className="forecast-overview-copy">
+                  <p className={`trend-chip ${forecast.analysis.trend}`}>
+                    {forecast.analysis.trend.replace("_", " ")} trend
+                  </p>
+                  <h2 id="forecast-result" ref={resultHeadingRef} tabIndex={-1}>
+                    TimesFM forecast
+                  </h2>
+                  <p>{forecast.analysis.summary}</p>
+                </div>
+                <div className="metric-grid overview-metrics">
+                  <article>
+                    <span>Latest close</span>
+                    <strong>{formatPrice(forecast.analysis.latest_close, currency)}</strong>
+                  </article>
+                  <article>
+                    <span>Forecast end</span>
+                    <strong>{formatPrice(forecast.analysis.forecast_end, currency)}</strong>
+                  </article>
+                  <article>
+                    <span>Modeled change</span>
+                    <strong className={forecast.analysis.forecast_change_percent >= 0 ? "positive" : "negative"}>
+                      {formatPercent(forecast.analysis.forecast_change_percent)}
+                    </strong>
+                  </article>
+                  <article>
+                    <span>Uncertainty width</span>
+                    <strong>{forecast.analysis.final_interval_width_percent.toFixed(2)}%</strong>
+                  </article>
+                </div>
+              </section>
+            )}
+
+            {activeTab === "research" && forecast && researchSignal && (
+              <section className={`research-signal ${researchSignal.tone}`} aria-labelledby="research-signal-heading">
+                <div>
+                  <p className="eyebrow">WHAT THE MODEL RANGE SAYS</p>
+                  <h3 id="research-signal-heading">{researchSignal.label}</h3>
+                  <p>{researchSignal.explanation}</p>
+                </div>
+                <div className="signal-range">
+                  <span>
+                    {forecast.metadata.horizon_trading_days}-session modeled change
+                  </span>
+                  <strong>{formatPercent(forecast.analysis.forecast_change_percent)}</strong>
+                </div>
+                <p className="signal-disclaimer">
+                  Research cue only. This excludes valuation, fundamentals, news,
+                  and personal circumstances; it is not a buy recommendation.
+                </p>
+              </section>
+            )}
+
+            <section className="analysis-toolbar" aria-label="Chart and forecast controls">
+              <div className="toolbar-heading">
+                <p className="step-label">02 · EXPLORE THE OUTLOOK</p>
+                <h3>Price history and forecast</h3>
+              </div>
               <fieldset>
-                <legend>Historical range</legend>
+                <legend>History</legend>
                 <div className="segment-control">
                   {ranges.map((item) => (
                     <button
@@ -571,6 +647,22 @@ export default function App() {
                   ))}
                 </div>
               </fieldset>
+              <fieldset>
+                <legend>Forecast horizon</legend>
+                <div className="segment-control horizon">
+                  {horizons.map((item) => (
+                    <button
+                      type="button"
+                      key={item}
+                      className={horizon === item ? "active" : ""}
+                      aria-pressed={horizon === item}
+                      onClick={() => setHorizon(item)}
+                    >
+                      {item} days
+                    </button>
+                  ))}
+                </div>
+              </fieldset>
               <label className="toggle">
                 <input
                   type="checkbox"
@@ -580,7 +672,21 @@ export default function App() {
                 <span />
                 Moving averages
               </label>
-            </div>
+              <button
+                type="button"
+                className="primary-button toolbar-action"
+                onClick={generateForecast}
+                disabled={
+                  !history ||
+                  autoForecastSymbol !== null ||
+                  forecasting ||
+                  backtesting ||
+                  screeningIndex
+                }
+              >
+                {forecasting ? <><span className="spinner small" /> Forecasting…</> : forecast ? "Refresh forecast" : "Generate forecast"}
+              </button>
+            </section>
 
             {loadingHistory ? (
               <div className="chart-loading" role="status">
@@ -601,87 +707,90 @@ export default function App() {
               </>
             ) : null}
 
-            <div className="forecast-panel">
-              <div>
-                <p className="eyebrow">FORECAST HORIZON</p>
-                <h3>Look ahead by trading session</h3>
-              </div>
-              <div className="forecast-actions">
-                <div className="segment-control horizon">
-                  {horizons.map((item) => (
+            {activeTab === "research" && (
+              <section className="research-tools" aria-labelledby="research-tools-heading">
+                <div className="research-tools-heading">
+                  <div>
+                    <p className="step-label">03 · GO DEEPER</p>
+                    <h2 id="research-tools-heading">Secondary research tools</h2>
+                  </div>
+                  <p>Compare the wider market or check recent model accuracy.</p>
+                </div>
+                <div className="research-tools-grid">
+                  <div className="forecast-panel screen-panel">
+                    <div>
+                      <p className="eyebrow">INDEX COMPARISON</p>
+                      <h3>Screen for positive median forecasts</h3>
+                      <p className="backtest-copy">
+                        Rank up to five constituents by positive 20-session
+                        median change.
+                      </p>
+                    </div>
+                    <div className="screen-actions">
+                      <label>
+                        <span>Index universe</span>
+                        <select
+                          value={researchIndexId}
+                          onChange={(event) => {
+                            setResearchIndexId(event.target.value as ResearchIndexId);
+                            setIndexScreen(null);
+                          }}
+                        >
+                          {researchIndices.map((index) => (
+                            <option key={index.id} value={index.id}>{index.name}</option>
+                          ))}
+                        </select>
+                      </label>
+                      <button
+                        type="button"
+                        className="primary-button secondary"
+                        onClick={runIndexScreen}
+                        disabled={
+                          loadingHistory ||
+                          autoForecastSymbol !== null ||
+                          forecasting ||
+                          backtesting ||
+                          screeningIndex
+                        }
+                      >
+                        {screeningIndex ? (
+                          <><span className="spinner small" /> Comparing index...</>
+                        ) : (
+                          "Find top 5 for 20 sessions"
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="forecast-panel backtest-panel">
+                    <div>
+                      <p className="eyebrow">HISTORICAL BACK-CHECK</p>
+                      <h3>Test the latest 7 known sessions</h3>
+                      <p className="backtest-copy">
+                        Hide seven closes, predict them, then compare the estimates
+                        with what happened.
+                      </p>
+                    </div>
                     <button
                       type="button"
-                      key={item}
-                      className={horizon === item ? "active" : ""}
-                      aria-pressed={horizon === item}
-                      onClick={() => setHorizon(item)}
+                      className="primary-button secondary"
+                      onClick={runBacktest}
+                      disabled={
+                        !history ||
+                        autoForecastSymbol !== null ||
+                        forecasting ||
+                        backtesting ||
+                        screeningIndex
+                      }
                     >
-                      {item} days
+                      {backtesting ? (
+                        <><span className="spinner small" /> Back-checking…</>
+                      ) : (
+                        "Back-check last 7 sessions"
+                      )}
                     </button>
-                  ))}
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  className="primary-button"
-                  onClick={generateForecast}
-                  disabled={
-                    !history ||
-                    autoForecastSymbol !== null ||
-                    forecasting ||
-                    backtesting ||
-                    screeningIndex
-                  }
-                >
-                  {forecasting ? <><span className="spinner small" /> Forecasting…</> : "Generate forecast"}
-                </button>
-              </div>
-            </div>
-
-            {activeTab === "research" && (
-              <div className="forecast-panel screen-panel">
-                <div>
-                  <p className="eyebrow">INDEX UNIVERSE COMPARISON</p>
-                  <h3>Find the strongest positive 20-session forecasts</h3>
-                  <p className="backtest-copy">
-                    Choose an index universe and rank up to five constituents by
-                    positive median percentage change.
-                  </p>
-                </div>
-                <div className="screen-actions">
-                  <label>
-                    <span>Index universe</span>
-                    <select
-                      value={researchIndexId}
-                      onChange={(event) => {
-                        setResearchIndexId(event.target.value as ResearchIndexId);
-                        setIndexScreen(null);
-                      }}
-                    >
-                      {researchIndices.map((index) => (
-                        <option key={index.id} value={index.id}>{index.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <button
-                    type="button"
-                    className="primary-button secondary"
-                    onClick={runIndexScreen}
-                    disabled={
-                      loadingHistory ||
-                      autoForecastSymbol !== null ||
-                      forecasting ||
-                      backtesting ||
-                      screeningIndex
-                    }
-                  >
-                    {screeningIndex ? (
-                      <><span className="spinner small" /> Comparing index...</>
-                    ) : (
-                      "Find top 5 for 20 sessions"
-                    )}
-                  </button>
-                </div>
-              </div>
+              </section>
             )}
 
             {activeTab === "research" && indexScreen && (
@@ -770,28 +879,8 @@ export default function App() {
               </section>
             )}
 
-            {activeTab === "research" && forecast && researchSignal && (
-              <section className={`research-signal ${researchSignal.tone}`} aria-labelledby="research-signal-heading">
-                <div>
-                  <p className="eyebrow">MODEL SCREENING SIGNAL</p>
-                  <h3 id="research-signal-heading">{researchSignal.label}</h3>
-                  <p>{researchSignal.explanation}</p>
-                </div>
-                <div className="signal-range">
-                  <span>
-                    {forecast.metadata.horizon_trading_days}-session modeled change
-                  </span>
-                  <strong>{formatPercent(forecast.analysis.forecast_change_percent)}</strong>
-                </div>
-                <p className="signal-disclaimer">
-                  Use this signal only to choose what to research next. It does not
-                  account for valuation, fundamentals, news, or your circumstances,
-                  and it is not a buy recommendation.
-                </p>
-              </section>
-            )}
-
-            <div className="forecast-panel backtest-panel">
+            {activeTab === "explore" && (
+              <div className="forecast-panel backtest-panel">
               <div>
                 <p className="eyebrow">HISTORICAL BACK-CHECK</p>
                 <h3>Test the latest 7 known sessions</h3>
@@ -818,7 +907,8 @@ export default function App() {
                   "Back-check last 7 sessions"
                 )}
               </button>
-            </div>
+              </div>
+            )}
 
             {backtest && (
               <section className="results" aria-labelledby="backtest-result">
@@ -894,39 +984,16 @@ export default function App() {
             )}
 
             {forecast && (
-              <section className="results" aria-labelledby="forecast-result">
-                <div className="result-intro">
-                  <p className={`trend-chip ${forecast.analysis.trend}`}>
-                    {forecast.analysis.trend.replace("_", " ")} trend
-                  </p>
-                  <h2 id="forecast-result" ref={resultHeadingRef} tabIndex={-1}>
-                    TimesFM forecast
-                  </h2>
-                  <p>{forecast.analysis.summary}</p>
+              <section className="forecast-methodology" aria-labelledby="forecast-methodology-heading">
+                <div className="section-heading">
+                  <div>
+                    <p className="step-label">DATA &amp; TRANSPARENCY</p>
+                    <h2 id="forecast-methodology-heading">Forecast values and methodology</h2>
+                  </div>
+                  <p>Inspect the model context, source, and every predicted range.</p>
                 </div>
-                <div className="metric-grid">
-                  <article>
-                    <span>Latest close</span>
-                    <strong>{formatPrice(forecast.analysis.latest_close, currency)}</strong>
-                  </article>
-                  <article>
-                    <span>Forecast end</span>
-                    <strong>{formatPrice(forecast.analysis.forecast_end, currency)}</strong>
-                  </article>
-                  <article>
-                    <span>Forecast change</span>
-                    <strong className={forecast.analysis.forecast_change_percent >= 0 ? "positive" : "negative"}>
-                      {formatPercent(forecast.analysis.forecast_change_percent)}
-                    </strong>
-                  </article>
-                  <article>
-                    <span>Final range width</span>
-                    <strong>{forecast.analysis.final_interval_width_percent.toFixed(2)}%</strong>
-                  </article>
-                </div>
-
                 <details className="forecast-details">
-                  <summary>Forecast values and methodology</summary>
+                  <summary>Open forecast data and run details</summary>
                   <div className="details-grid">
                     <div>
                       <h3>Run details</h3>
@@ -966,7 +1033,7 @@ export default function App() {
       </main>
 
       <footer>
-        <p>Built for local research with Google Research TimesFM.</p>
+        <p><strong>TimeSeries Forecast Lab</strong> · Private, local market research.</p>
         <p>Daily NSE and BSE stock forecasts only · Not financial advice.</p>
       </footer>
       <div className="sr-only" aria-live="polite">
