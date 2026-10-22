@@ -18,8 +18,20 @@ def test_indian_calendar_skips_weekends_and_diwali(exchange: str) -> None:
   ]
 
 
+@pytest.mark.parametrize("exchange", ["NSE", "BSE"])
+def test_indian_calendar_identifies_trading_sessions(exchange: str) -> None:
+  calendar = TradingCalendar()
+
+  assert calendar.is_session(exchange, date(2026, 10, 19)) is True
+  assert calendar.is_session(exchange, date(2026, 10, 20)) is False
+  assert calendar.is_session(exchange, date(2026, 10, 24)) is False
+
+
 def test_indian_calendar_rejects_unsupported_exchange() -> None:
   calendar = TradingCalendar()
 
   with pytest.raises(ValueError, match="Unsupported Indian exchange"):
     calendar.next_sessions("NASDAQ", date(2026, 10, 16), 3)
+
+  with pytest.raises(ValueError, match="Unsupported Indian exchange"):
+    calendar.is_session("NASDAQ", date(2026, 10, 19))

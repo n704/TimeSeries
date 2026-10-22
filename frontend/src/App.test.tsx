@@ -8,7 +8,7 @@ import {
 
 import App from "./App";
 import { ApiError } from "./api/client";
-import type { TrackingState } from "./types";
+import type { PortfolioPosition, TrackingState } from "./types";
 
 const apiMocks = vi.hoisted(() => ({
   createBacktest: vi.fn(),
@@ -46,6 +46,19 @@ vi.mock("./api/client", () => ({
 
 vi.mock("./components/PriceChart", () => ({
   PriceChart: () => <div>Price chart</div>,
+}));
+
+vi.mock("./components/PortfolioSnapshotChart", () => ({
+  PortfolioSnapshotChart: ({
+    position,
+  }: {
+    position: PortfolioPosition;
+  }) => (
+    <div
+      role="img"
+      aria-label={`${position.security.symbol} saved adjusted-close snapshot chart`}
+    />
+  ),
 }));
 
 const security = {
@@ -744,6 +757,14 @@ describe("App", () => {
       await screen.findByText(/latest daily move/i),
     ).toBeInTheDocument();
     expect(screen.getByText(/\+10\.00% · 1 of 1 through 2026-10-22/i)).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { name: /portfolio snapshot charts/i }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("img", {
+        name: /reliance\.ns saved adjusted-close snapshot chart/i,
+      }),
+    ).toBeInTheDocument();
     const portfolioTable = screen.getByRole("table", {
       name: /locally saved paper portfolio positions/i,
     });

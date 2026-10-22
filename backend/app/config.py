@@ -2,7 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Annotated, Literal
 
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -26,6 +26,7 @@ class Settings(BaseSettings):
   request_timeout_seconds: float = Field(default=15, gt=0)
   min_history_observations: int = Field(default=120, ge=20)
   tracking_database_path: Path = Path("data/tracking.sqlite3")
+  tracking_database_url: SecretStr | None = None
 
   @field_validator("allowed_origins", mode="before")
   @classmethod

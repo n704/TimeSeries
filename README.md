@@ -10,9 +10,10 @@ A Mac-first stock trend forecasting application with:
 - historical and forecast charts with p10-p90 uncertainty ranges;
 - forecast evidence that compares the model direction with the latest
   five-session move and an isolated seven-session holdout;
-- a SQLite-backed watchlist and paper portfolio with selectable 7-, 20-, and
+- a database-backed watchlist and paper portfolio with selectable 7-, 20-, and
   60-session probabilistic outlooks and saved daily adjusted closes captured
-  after 6:00 PM Asia/Kolkata.
+  at 4:00 PM Asia/Kolkata on exchange trading days. Direct local runs default
+  to SQLite; Docker Compose uses PostgreSQL.
 
 The application forecasts 5, 20, or 60 future trading sessions. It does not
 support intraday data, options, cryptocurrency, brokerage connections, trade
@@ -201,7 +202,18 @@ The readiness endpoint returns `503` until TimesFM has loaded.
 ### Docker Compose development stack
 
 Set `TIMESFM_CHECKPOINT_HOST_PATH` in `.env` to the same absolute checkpoint
-directory used by `TIMESFM_CHECKPOINT_PATH`, then run:
+directory used by `TIMESFM_CHECKPOINT_PATH`, and replace
+`POSTGRES_PASSWORD` with a local password. For an existing SQLite tracker,
+migrate it before starting the full stack:
+
+```bash
+docker compose up -d postgres
+docker compose --profile migration run --rm tracking-migration
+```
+
+The migration is transactional, verifies the copied state and snapshots, keeps
+the SQLite source unchanged, and refuses to overwrite a nonempty PostgreSQL
+database. Then run:
 
 ```bash
 docker compose up --build
@@ -215,7 +227,10 @@ docker compose down
 
 Compose bind-mounts the checkpoint read-only at `/models/timesfm`; it never
 copies model weights into an image. The Linux backend uses PyTorch CPU because
-MLX is macOS-only. This stack is for local evaluation, not production.
+MLX is macOS-only. PostgreSQL persists in the `postgres_data` Docker volume and
+binds its development port to loopback only. `docker compose down` preserves
+that volume; `docker compose down -v` permanently removes it. This stack is for
+local evaluation, not production.
 
 ## API summary
 
@@ -226,17 +241,18 @@ MLX is macOS-only. This stack is for local evaluation, not production.
 | `POST` | `/api/v1/forecasts` | Generate a 5-, 20-, or 60-session forecast |
 | `POST` | `/api/v1/backtests` | Back-check predictions for the latest 7 sessions |
 | `POST` | `/api/v1/research/indexes/screen` | Rank up to 5 positive 20-session forecasts in a supported index |
-| `GET` | `/api/v1/tracking` | Load the SQLite-backed watchlist and paper portfolio |
+| `GET` | `/api/v1/tracking` | Load the database-backed watchlist and paper portfolio |
 | `PUT` | `/api/v1/tracking` | Atomically replace saved tracking state |
 | `GET` | `/health/live` | Check the API process |
 | `GET` | `/health/ready` | Check whether TimesFM is loaded |
 
 The backend records the latest available adjusted close for every paper
-position in a normalized SQLite table after 6:00 PM Asia/Kolkata. A process
-that starts after 6:00 PM catches up automatically. Rows are keyed by symbol
-and exchange market date, so weekends, holidays, and restarts do not create
-duplicate or synthetic prices. Tracking responses include up to 30 saved
-sessions per position for daily-change display.
+position in a normalized tracking table at 4:00 PM Asia/Kolkata on that
+position's exchange trading days. A process that starts later on the same
+trading day catches up automatically. Rows are keyed by symbol and exchange
+market date, so weekends, holidays, and restarts do not create duplicate or
+synthetic prices. Tracking responses include up to 30 saved sessions per
+position for adjusted-close charts and an exact daily-change table.
 
 Example forecast request:
 

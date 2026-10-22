@@ -2,7 +2,7 @@
 
 FastAPI service for security search, adjusted-close history, exchange-aware
 forecast dates, local TimesFM inference, holdout-aware neutral trend analysis,
-and SQLite watchlist/portfolio persistence.
+and SQLite or PostgreSQL watchlist/portfolio persistence.
 
 ## Architecture
 
@@ -32,8 +32,10 @@ app/api/routes.py
 | `app/services/calendar.py` | Future NSE and BSE trading sessions |
 | `app/services/forecast.py` | Forecast protocol and local TimesFM adapter |
 | `app/services/analysis.py` | Trend metrics and neutral summary |
-| `app/services/tracking.py` | SQLite watchlist and paper portfolio persistence |
-| `app/services/portfolio_snapshots.py` | Daily 6 PM portfolio price capture |
+| `app/services/tracking.py` | Tracking contract and SQLite persistence |
+| `app/services/postgres_tracking.py` | PostgreSQL tracking persistence |
+| `app/services/tracking_migration.py` | Verified SQLite-to-PostgreSQL migration |
+| `app/services/portfolio_snapshots.py` | Daily 4 PM exchange-session portfolio price capture |
 | `app/api/routes.py` | `/api/v1` endpoints and orchestration |
 
 ## Setup
@@ -95,15 +97,36 @@ structured `MODEL_NOT_READY` error.
 
 Tracking data is stored in `data/tracking.sqlite3` by default. Override the path
 with `TRACKING_DATABASE_PATH`. The database and its WAL files are local runtime
-data and must not be committed.
+data and must not be committed. Set `TRACKING_DATABASE_URL` to select
+PostgreSQL instead; the URL is treated as a secret by typed configuration and
+must not be logged or committed.
 
-The SQLite database contains the single tracking-state document plus a
+Both stores contain the single tracking-state document plus a
 normalized `portfolio_price_snapshots` table keyed by symbol and market date.
-From 6:00 PM until midnight Asia/Kolkata, the API process captures each
-uncaptured position's latest available adjusted close and rechecks failures or
-new positions every five minutes. A process that starts after 6:00 PM catches
-up automatically. The market-date key makes repeated starts and non-trading
-days idempotent. Provider errors are logged and no synthetic close is inserted.
+At 4:00 PM Asia/Kolkata on an exchange trading day, the API process captures
+each eligible position's latest available adjusted close. Until midnight it
+rechecks failures, delayed current-session data, and new positions every five
+minutes. A process that starts later on the same trading day catches up
+automatically. Closed exchange dates do not call the provider, and the
+market-date key makes repeated starts idempotent. Provider errors are logged
+and no synthetic close is inserted.
+
+### Migrate SQLite tracking data to PostgreSQL
+
+Stop the API first so the SQLite source cannot change during the copy, then run:
+
+```bash
+TRACKING_DATABASE_URL=postgresql://timeseries@127.0.0.1:5432/timeseries \
+  uv run python -m app.services.tracking_migration \
+  --sqlite-path data/tracking.sqlite3
+```
+
+Supply the password through normal libpq configuration such as `PGPASSWORD`;
+do not put it in shell history. The command creates the PostgreSQL schema,
+copies the state and all saved snapshots in one transaction, verifies an exact
+round trip, and leaves SQLite unchanged. It fails if PostgreSQL already
+contains tracking data. Use `--force` only when replacing that destination is
+intentional.
 
 ## API
 
@@ -218,6 +241,12 @@ uv run pytest
 
 The default tests use `FakeMarketDataProvider`, `FakeForecastModel`, and
 `FakeTradingCalendar`. They do not use the network or download a checkpoint.
+The PostgreSQL integration test is skipped unless `TEST_POSTGRES_URL` is set:
+
+```bash
+TEST_POSTGRES_URL=postgresql://timeseries@127.0.0.1:5432/timeseries_test \
+  uv run pytest tests/test_tracking_migration.py
+```
 
 Tests cover:
 
@@ -228,6 +257,7 @@ Tests cover:
 - latest-holdout percentage correction of the next forecast and quantiles;
 - recent-trend disagreement and forecast evidence levels;
 - multi-index batch screening and positive 20-session ranking;
+- SQLite persistence and guarded PostgreSQL migration;
 - application startup cleanup;
 - local adapter checkpoint requirements;
 - decile-to-p10/p50/p90 mapping.

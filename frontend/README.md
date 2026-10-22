@@ -46,6 +46,7 @@ market-data credentials, model credentials, or checkpoint paths.
 | `src/App.tsx` | Search, selection, history, forecast state, and primary layout |
 | `src/api/client.ts` | Typed fetch wrapper and public API errors |
 | `src/components/PriceChart.tsx` | Chart view model and Recharts rendering |
+| `src/components/PortfolioSnapshotChart.tsx` | Per-position saved adjusted-close chart |
 | `src/components/TrackingDashboard.tsx` | Local watchlist and paper portfolio presentation |
 | `src/hooks/useTracking.ts` | API-backed tracking state and browser-data migration |
 | `src/types.ts` | API-facing TypeScript types |
@@ -73,20 +74,23 @@ market-data credentials, model credentials, or checkpoint paths.
    starts after a 300 ms debounce.
 9. Add the selected stock to the local watchlist or save a paper position with
    quantity and average price.
-10. Open **Watchlist & portfolio** to review saved price snapshots, paper cost
-    basis, market value, unrealized change, latest daily move, saved per-session
-    changes, and a selectable 7-, 20-, or 60-session median and p10-p90 forecast
-    range.
+10. Open **Watchlist & portfolio** to review per-position adjusted-close
+    snapshot charts with average-price reference lines, the exact saved-session
+    table, paper cost basis, market value, unrealized change, latest daily move,
+    and a selectable 7-, 20-, or 60-session median and p10-p90 forecast range.
 
-Watchlist and paper portfolio data is stored by the backend in its local SQLite
-database. Existing browser-local tracking data is migrated once when the
-database is empty. Tracking is not synchronized to a user account, another
-device, or a brokerage.
+Watchlist and paper portfolio data is stored by the backend in its configured
+local tracking database. Direct backend runs default to SQLite and Docker
+Compose uses PostgreSQL. Existing browser-local tracking data is migrated once
+when the database is empty. Tracking is not synchronized to a user account,
+another device, or a brokerage.
 For each paper position, the backend saves its latest available adjusted close
-after 6:00 PM Asia/Kolkata under the provider's exchange market date. The
-frontend polls tracking state once per minute so a page left open across the
-capture time receives the new daily move. Weekends and holidays reuse the last
-market date and therefore do not create synthetic daily rows.
+at 4:00 PM Asia/Kolkata on its exchange trading days under the provider's
+exchange market date. The frontend polls tracking state once per minute so a
+page left open across the capture time receives the new daily move. Weekends
+and exchange holidays do not trigger provider capture or create synthetic
+daily rows. Each position with saved history has a responsive chart; the
+expandable table remains the accessible exact-value alternative.
 Opening the tracker or changing its forecast horizon automatically requests
 missing TimesFM forecasts sequentially. The 7- and 20-session views use a
 20-session run; the 60-session view uses a 60-session run.

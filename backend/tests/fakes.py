@@ -92,6 +92,10 @@ class FakeForecastModel:
 
 
 class FakeTradingCalendar:
+  def is_session(self, exchange: str, on: date) -> bool:
+    assert exchange in {"NSE", "BSE"}
+    return True
+
   def next_sessions(self, exchange: str, after: date, count: int) -> list[date]:
     assert exchange == "NSE"
     return [after + timedelta(days=index + 1) for index in range(count)]

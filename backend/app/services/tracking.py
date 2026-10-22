@@ -1,5 +1,7 @@
 import asyncio
+import math
 import sqlite3
+from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import Protocol
@@ -7,19 +9,94 @@ from typing import Protocol
 from pydantic import ValidationError
 
 from app.schemas import (
-    PortfolioPosition,
     PortfolioPositionResponse,
     PortfolioPriceSnapshot,
     TrackingState,
     TrackingStateResponse,
-    WatchlistItem,
 )
 
 PRICE_HISTORY_LIMIT = 30
 
 
+@dataclass(frozen=True)
+class StoredPriceSnapshot:
+  symbol: str
+  market_date: date
+  adjusted_close: float
+  captured_at: datetime
+
+
+@dataclass(frozen=True)
+class TrackingDataDump:
+  state: TrackingState
+  updated_at: datetime | None
+  snapshots: tuple[StoredPriceSnapshot, ...]
+
+
 class TrackingStoreError(RuntimeError):
   pass
+
+
+def validate_snapshot_price(adjusted_close: float) -> None:
+  if not math.isfinite(adjusted_close) or adjusted_close <= 0:
+    raise TrackingStoreError(
+        "Portfolio snapshot price must be finite and positive."
+    )
+
+
+def merge_tracking_state(
+    state: TrackingState,
+    latest_by_symbol: dict[str, tuple[date, float]],
+) -> TrackingState:
+  positions = []
+  for position in state.positions:
+    latest = latest_by_symbol.get(position.security.symbol)
+    if latest is None or latest[0] < position.last_market_date:
+      positions.append(position)
+      continue
+    positions.append(
+        position.model_copy(
+            update={
+                "last_market_date": latest[0],
+                "latest_close": latest[1],
+            }
+        )
+    )
+
+  watchlist = []
+  for item in state.watchlist:
+    latest = latest_by_symbol.get(item.security.symbol)
+    if latest is None or latest[0] < item.last_market_date:
+      watchlist.append(item)
+      continue
+    watchlist.append(
+        item.model_copy(
+            update={
+                "last_market_date": latest[0],
+                "latest_close": latest[1],
+            }
+        )
+    )
+  return TrackingState(watchlist=watchlist, positions=positions)
+
+
+def build_tracking_response(
+    state: TrackingState,
+    updated_at: datetime | None,
+    histories: dict[str, list[PortfolioPriceSnapshot]],
+) -> TrackingStateResponse:
+  positions = [
+      PortfolioPositionResponse(
+          **position.model_dump(),
+          price_history=histories.get(position.security.symbol, []),
+      )
+      for position in state.positions
+  ]
+  return TrackingStateResponse(
+      watchlist=state.watchlist,
+      positions=positions,
+      updated_at=updated_at,
+  )
 
 
 class TrackingStore(Protocol):
@@ -65,6 +142,9 @@ class SQLiteTrackingStore:
         adjusted_close,
         captured_at,
     )
+
+  async def export_data(self) -> TrackingDataDump:
+    return await asyncio.to_thread(self._export_data_sync)
 
   def _connect(self) -> sqlite3.Connection:
     connection = sqlite3.connect(self._database_path, timeout=10)
@@ -142,8 +222,7 @@ class SQLiteTrackingStore:
       adjusted_close: float,
       captured_at: datetime,
   ) -> None:
-    if adjusted_close <= 0:
-      raise TrackingStoreError("Portfolio snapshot price must be positive.")
+    validate_snapshot_price(adjusted_close)
     try:
       with self._connect() as connection:
         state, _ = self._load_state(connection)
@@ -184,6 +263,36 @@ class SQLiteTrackingStore:
         )
     except (sqlite3.Error, ValidationError, ValueError) as error:
       raise TrackingStoreError("Portfolio price snapshot could not be saved.") from error
+
+  def _export_data_sync(self) -> TrackingDataDump:
+    try:
+      with self._connect() as connection:
+        state, updated_at = self._load_state(connection)
+        rows = connection.execute(
+            """
+            SELECT symbol, market_date, adjusted_close, captured_at
+            FROM portfolio_price_snapshots
+            ORDER BY symbol, market_date
+            """
+        ).fetchall()
+        snapshots = tuple(
+            StoredPriceSnapshot(
+                symbol=symbol,
+                market_date=date.fromisoformat(market_date),
+                adjusted_close=adjusted_close,
+                captured_at=datetime.fromisoformat(captured_at),
+            )
+            for symbol, market_date, adjusted_close, captured_at in rows
+        )
+        for snapshot in snapshots:
+          validate_snapshot_price(snapshot.adjusted_close)
+        return TrackingDataDump(
+            state=state or TrackingState(),
+            updated_at=updated_at,
+            snapshots=snapshots,
+        )
+    except (sqlite3.Error, ValidationError, ValueError) as error:
+      raise TrackingStoreError("Tracking data could not be exported.") from error
 
   def _load_state(
       self,
@@ -242,46 +351,7 @@ class SQLiteTrackingStore:
         symbol: (date.fromisoformat(market_date), adjusted_close)
         for symbol, market_date, adjusted_close in rows
     }
-
-    positions = [
-        self._merge_position_snapshot(position, latest_by_symbol)
-        for position in state.positions
-    ]
-    watchlist = [
-        self._merge_watchlist_snapshot(item, latest_by_symbol)
-        for item in state.watchlist
-    ]
-    return TrackingState(watchlist=watchlist, positions=positions)
-
-  def _merge_position_snapshot(
-      self,
-      position: PortfolioPosition,
-      latest_by_symbol: dict[str, tuple[date, float]],
-  ) -> PortfolioPosition:
-    latest = latest_by_symbol.get(position.security.symbol)
-    if latest is None or latest[0] < position.last_market_date:
-      return position
-    return position.model_copy(
-        update={
-            "last_market_date": latest[0],
-            "latest_close": latest[1],
-        }
-    )
-
-  def _merge_watchlist_snapshot(
-      self,
-      item: WatchlistItem,
-      latest_by_symbol: dict[str, tuple[date, float]],
-  ) -> WatchlistItem:
-    latest = latest_by_symbol.get(item.security.symbol)
-    if latest is None or latest[0] < item.last_market_date:
-      return item
-    return item.model_copy(
-        update={
-            "last_market_date": latest[0],
-            "latest_close": latest[1],
-        }
-    )
+    return merge_tracking_state(state, latest_by_symbol)
 
   def _build_response(
       self,
@@ -293,18 +363,7 @@ class SQLiteTrackingStore:
         connection,
         [position.security.symbol for position in state.positions],
     )
-    positions = [
-        PortfolioPositionResponse(
-            **position.model_dump(),
-            price_history=histories.get(position.security.symbol, []),
-        )
-        for position in state.positions
-    ]
-    return TrackingStateResponse(
-        watchlist=state.watchlist,
-        positions=positions,
-        updated_at=updated_at,
-    )
+    return build_tracking_response(state, updated_at, histories)
 
   def _load_price_histories(
       self,

@@ -2,6 +2,8 @@ import asyncio
 import sqlite3
 from datetime import UTC, date, datetime
 
+import pytest
+
 from app.schemas import (
     InstrumentType,
     PortfolioPosition,
@@ -9,7 +11,7 @@ from app.schemas import (
     TrackingState,
     WatchlistItem,
 )
-from app.services.tracking import SQLiteTrackingStore
+from app.services.tracking import SQLiteTrackingStore, TrackingStoreError
 
 
 def test_sqlite_tracking_store_persists_across_instances(tmp_path) -> None:
@@ -107,6 +109,12 @@ def test_sqlite_tracking_store_keeps_newer_background_prices(tmp_path) -> None:
       date(2026, 10, 19),
   ]
   assert loaded.positions[0].price_history[-1].adjusted_close == 1230.5
+  exported = asyncio.run(store.export_data())
+  assert exported.state.positions[0].security.symbol == "RELIANCE.NS"
+  assert [snapshot.market_date for snapshot in exported.snapshots] == [
+      date(2026, 10, 16),
+      date(2026, 10, 19),
+  ]
 
 
 def test_sqlite_tracking_store_prunes_removed_position_history(tmp_path) -> None:
@@ -151,3 +159,19 @@ def test_sqlite_tracking_store_prunes_removed_position_history(tmp_path) -> None
         "SELECT COUNT(*) FROM portfolio_price_snapshots"
     ).fetchone()[0]
   assert count == 0
+
+
+def test_sqlite_tracking_store_rejects_non_finite_snapshot(tmp_path) -> None:
+  store = SQLiteTrackingStore(tmp_path / "tracking.sqlite3")
+
+  asyncio.run(store.initialize())
+
+  with pytest.raises(TrackingStoreError, match="finite and positive"):
+    asyncio.run(
+        store.record_price_snapshot(
+            "RELIANCE.NS",
+            date(2026, 10, 16),
+            float("inf"),
+            datetime(2026, 10, 16, 12, 30, tzinfo=UTC),
+        )
+    )
