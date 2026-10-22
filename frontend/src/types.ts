@@ -31,12 +31,30 @@ export interface ForecastPoint {
   p90: number;
 }
 
+export interface BacktestMetrics {
+  mean_absolute_error: number;
+  mean_absolute_percentage_error: number;
+  interval_coverage_percent: number;
+  directional_accuracy_percent: number;
+  end_direction_match: boolean;
+}
+
+export interface HistoricalEvaluation {
+  holdout_sessions: number;
+  context_end_date: string;
+  metrics: BacktestMetrics;
+}
+
 export interface ForecastAnalysis {
   latest_close: number;
   forecast_end: number;
   forecast_change_percent: number;
   historical_change_5d_percent: number | null;
   historical_change_20d_percent: number | null;
+  recent_trend: "upward" | "downward" | "mostly_flat";
+  trend_alignment: "aligned" | "opposed" | "neutral";
+  evidence_level: "supportive" | "mixed" | "limited";
+  historical_evaluation: HistoricalEvaluation | null;
   sma_20: number | null;
   sma_50: number | null;
   trend: "upward" | "downward" | "mostly_flat";
@@ -117,11 +135,7 @@ export interface BacktestResponse {
   backtest_id: string;
   security: Security;
   points: BacktestPoint[];
-  metrics: {
-    mean_absolute_error: number;
-    mean_absolute_percentage_error: number;
-    interval_coverage_percent: number;
-  };
+  metrics: BacktestMetrics;
   metadata: {
     holdout_sessions: number;
     context_observations: number;

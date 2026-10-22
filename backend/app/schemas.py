@@ -56,12 +56,30 @@ class ForecastPoint(BaseModel):
   p90: float = Field(gt=0)
 
 
+class BacktestMetrics(BaseModel):
+  mean_absolute_error: float = Field(ge=0)
+  mean_absolute_percentage_error: float = Field(ge=0)
+  interval_coverage_percent: float = Field(ge=0, le=100)
+  directional_accuracy_percent: float = Field(ge=0, le=100)
+  end_direction_match: bool
+
+
+class HistoricalEvaluation(BaseModel):
+  holdout_sessions: int = Field(ge=1)
+  context_end_date: date
+  metrics: BacktestMetrics
+
+
 class Analysis(BaseModel):
   latest_close: float
   forecast_end: float
   forecast_change_percent: float
   historical_change_5d_percent: float | None
   historical_change_20d_percent: float | None
+  recent_trend: Literal["upward", "downward", "mostly_flat"]
+  trend_alignment: Literal["aligned", "opposed", "neutral"]
+  evidence_level: Literal["supportive", "mixed", "limited"]
+  historical_evaluation: HistoricalEvaluation | None
   sma_20: float | None
   sma_50: float | None
   trend: Literal["upward", "downward", "mostly_flat"]
@@ -148,12 +166,6 @@ class BacktestPoint(BaseModel):
   p10: float = Field(gt=0)
   p50: float = Field(gt=0)
   p90: float = Field(gt=0)
-
-
-class BacktestMetrics(BaseModel):
-  mean_absolute_error: float = Field(ge=0)
-  mean_absolute_percentage_error: float = Field(ge=0)
-  interval_coverage_percent: float = Field(ge=0, le=100)
 
 
 class BacktestMetadata(BaseModel):

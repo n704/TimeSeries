@@ -63,6 +63,12 @@ function formatPercent(value: number): string {
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+function formatOptionalPercent(value: unknown): string {
+  return typeof value === "number" && Number.isFinite(value)
+    ? `${value.toFixed(2)}%`
+    : "Unavailable";
+}
+
 function isObservationCount(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 0;
 }
@@ -93,36 +99,58 @@ function getResearchSignal(forecast: ForecastResponse): ResearchSignal {
       explanation: "TimesFM did not return an end-of-horizon range to screen.",
     };
   }
+  let signal: ResearchSignal;
   if (finalPoint.p10 > latest) {
-    return {
+    signal = {
       label: "Range above latest close",
       tone: "positive",
       explanation:
         "The full final p10-p90 range is above the latest adjusted close, while uncertainty still applies.",
     };
-  }
-  if (finalPoint.p50 > latest) {
-    return {
+  } else if (finalPoint.p50 > latest) {
+    signal = {
       label: "Positive median, overlapping downside",
       tone: "mixed",
       explanation:
         "The median ends above the latest close, but the uncertainty range still includes a lower outcome.",
     };
-  }
-  if (finalPoint.p90 < latest) {
-    return {
+  } else if (finalPoint.p90 < latest) {
+    signal = {
       label: "Range below latest close",
       tone: "negative",
       explanation:
         "The full final p10-p90 range is below the latest adjusted close.",
     };
+  } else {
+    signal = {
+      label: "Mixed forecast range",
+      tone: "mixed",
+      explanation:
+        "The final uncertainty range crosses the latest close and the median does not show positive modeled change.",
+    };
   }
-  return {
-    label: "Mixed forecast range",
-    tone: "mixed",
-    explanation:
-      "The final uncertainty range crosses the latest close and the median does not show positive modeled change.",
-  };
+
+  if (forecast.analysis.trend_alignment === "opposed") {
+    const recentChange = forecast.analysis.historical_change_5d_percent;
+    const recentContext =
+      recentChange === null
+        ? "The latest five-session direction points the other way."
+        : `The latest five-session move (${formatPercent(recentChange)}) points the other way.`;
+    return {
+      label: "Model range conflicts with recent trend",
+      tone: "mixed",
+      explanation: `${signal.explanation} ${recentContext}`,
+    };
+  }
+  if (forecast.analysis.evidence_level === "limited") {
+    return {
+      label: "Model range has limited evidence",
+      tone: "mixed",
+      explanation:
+        `${signal.explanation} The recent-pattern and holdout checks do not provide strong supporting evidence.`,
+    };
+  }
+  return signal;
 }
 
 function getPortfolioOutlooks(forecast: ForecastResponse): PortfolioOutlooks {
@@ -421,6 +449,8 @@ export default function App() {
     "INR";
   const latest = activeHistory.at(-1);
   const researchSignal = forecast ? getResearchSignal(forecast) : null;
+  const historicalEvaluation =
+    forecast?.analysis.historical_evaluation ?? null;
   const selectedPosition = selected
     ? positions.find((position) => position.security.symbol === selected.symbol)
     : undefined;
@@ -928,9 +958,14 @@ export default function App() {
             {forecast && (
               <section className="forecast-overview" aria-labelledby="forecast-result">
                 <div className="forecast-overview-copy">
-                  <p className={`trend-chip ${forecast.analysis.trend}`}>
-                    {forecast.analysis.trend.replace("_", " ")} trend
-                  </p>
+                  <div className="forecast-chip-row">
+                    <p className={`trend-chip ${forecast.analysis.trend}`}>
+                      TimesFM median: {forecast.analysis.trend.replace("_", " ")}
+                    </p>
+                    <p className={`trend-chip evidence-${forecast.analysis.evidence_level}`}>
+                      Evidence: {forecast.analysis.evidence_level}
+                    </p>
+                  </div>
                   <h2 id="forecast-result" ref={resultHeadingRef} tabIndex={-1}>
                     TimesFM forecast
                   </h2>
@@ -956,6 +991,74 @@ export default function App() {
                     <strong>{forecast.analysis.final_interval_width_percent.toFixed(2)}%</strong>
                   </article>
                 </div>
+              </section>
+            )}
+
+            {forecast && (
+              <section
+                className={`forecast-evidence ${forecast.analysis.evidence_level}`}
+                aria-labelledby="forecast-evidence-heading"
+              >
+                <div className="forecast-evidence-heading">
+                  <div>
+                    <p className="eyebrow">FORECAST EVIDENCE</p>
+                    <h3 id="forecast-evidence-heading">
+                      Accuracy and recent-pattern check
+                    </h3>
+                  </div>
+                  <strong>{forecast.analysis.evidence_level} evidence</strong>
+                </div>
+                <div className="metric-grid evidence-metrics">
+                  <article>
+                    <span>Latest 5-session move</span>
+                    <strong
+                      className={
+                        (forecast.analysis.historical_change_5d_percent ?? 0) >= 0
+                          ? "positive"
+                          : "negative"
+                      }
+                    >
+                      {forecast.analysis.historical_change_5d_percent === null
+                        ? "Unavailable"
+                        : formatPercent(
+                            forecast.analysis.historical_change_5d_percent,
+                          )}
+                    </strong>
+                  </article>
+                  <article>
+                    <span>7-session back-check MAPE</span>
+                    <strong>
+                      {historicalEvaluation
+                        ? `${historicalEvaluation.metrics.mean_absolute_percentage_error.toFixed(2)}%`
+                        : "Unavailable"}
+                    </strong>
+                  </article>
+                  <article>
+                    <span>Daily direction accuracy</span>
+                    <strong>
+                      {historicalEvaluation
+                        ? `${historicalEvaluation.metrics.directional_accuracy_percent.toFixed(2)}%`
+                        : "Unavailable"}
+                    </strong>
+                  </article>
+                  <article>
+                    <span>p10-p90 holdout coverage</span>
+                    <strong>
+                      {historicalEvaluation
+                        ? `${historicalEvaluation.metrics.interval_coverage_percent.toFixed(2)}%`
+                        : "Unavailable"}
+                    </strong>
+                  </article>
+                </div>
+                <p className="evidence-note">
+                  {historicalEvaluation
+                    ? `The isolated holdout used data only through ${historicalEvaluation.context_end_date}; its overall direction ${
+                        historicalEvaluation.metrics.end_direction_match
+                          ? "matched"
+                          : "did not match"
+                      } the known result. These measures describe one historical window, not future certainty.`
+                    : "There is enough history to forecast, but not enough earlier data for an isolated seven-session holdout. Evidence remains limited."}
+                </p>
               </section>
             )}
 
@@ -1298,7 +1401,24 @@ export default function App() {
                       {backtest.metrics.interval_coverage_percent.toFixed(2)}%
                     </strong>
                   </article>
+                  <article>
+                    <span>Daily direction accuracy</span>
+                    <strong>
+                      {formatOptionalPercent(
+                        backtest.metrics.directional_accuracy_percent,
+                      )}
+                    </strong>
+                  </article>
                 </div>
+                <p className="backtest-copy">
+                  {typeof backtest.metrics.end_direction_match === "boolean"
+                    ? `The median path's overall direction ${
+                        backtest.metrics.end_direction_match
+                          ? "matched"
+                          : "did not match"
+                      } the known holdout direction.`
+                    : "Directional metrics are unavailable because the backend response is from an older API version. Restart the matching backend to load them."}
+                </p>
                 <div className="forecast-details backtest-details">
                   <div className="table-scroll">
                     <table>

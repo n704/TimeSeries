@@ -57,13 +57,18 @@ market-data credentials, model credentials, or checkpoint paths.
 2. Reliance is selected and its 20-session forecast starts automatically.
 3. Choose any of the 50 constituents from the dropdown and select
    **Predict selected stock**.
-4. Review the neutral model-screening signal, price range, uncertainty, metadata,
-   and disclaimer. The signal is not a buy recommendation.
+4. Review the neutral model-screening signal, price range, uncertainty,
+   five-session trend alignment, seven-session holdout evidence, metadata, and
+   disclaimer. A conflicting recent trend or weak holdout result is shown as
+   limited evidence rather than an unqualified positive signal. The signal is
+   not a buy recommendation.
 5. Optionally select NIFTY 50, NIFTY NEXT 50, NIFTY MIDCAP SELECT, or NIFTY
    SMALLCAP 100 and view up to five positive 20-session median forecast changes.
 6. Optionally change the display range, moving-average overlays, or forecast
    horizon.
-7. Optionally back-check the model against the latest seven known sessions.
+7. Optionally open the detailed back-check for actual and predicted values from
+   the latest seven known sessions. Forecast results already summarize its
+   error, coverage, and directional accuracy when enough history is available.
 8. Open **Stock explorer** to search any supported NSE/BSE common stock; search
    starts after a 300 ms debounce.
 9. Add the selected stock to the local watchlist or save a paper position with
@@ -98,6 +103,21 @@ Index membership can change during scheduled reviews.
 - A symbol change aborts both forecast and back-check requests.
 
 Maintain these rules when refactoring state or adopting a server-state library.
+
+## Forecast evidence
+
+The primary forecast keeps TimesFM p10, p50, and p90 values unchanged. Its
+evidence panel separately shows:
+
+- the latest five-session adjusted-close move and whether it aligns with the
+  modeled direction;
+- mean absolute percentage error from one isolated seven-session holdout;
+- daily directional accuracy and p10-p90 coverage for that holdout;
+- whether the modeled end direction matched the known holdout.
+
+The panel labels the combined evidence as supportive, mixed, or limited. These
+labels describe historical support for the displayed outlook, not a probability
+of success or a recommendation.
 
 ## Chart contract
 
