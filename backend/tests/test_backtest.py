@@ -1,7 +1,13 @@
 from datetime import date, timedelta
 
+import pytest
+
 from app.schemas import BacktestPoint
-from app.services.backtest import apply_forecast_bias, evaluate_backtest, forecast_bias
+from app.services.backtest import (
+    apply_forecast_correction,
+    calculate_forecast_correction,
+    evaluate_backtest,
+)
 from app.services.forecast import ModelForecast
 
 
@@ -25,31 +31,35 @@ def test_backtest_measures_daily_and_end_direction_accuracy() -> None:
   assert metrics.end_direction_match is False
 
 
-def test_forecast_bias_shifts_future_quantiles_without_changing_spread() -> None:
+def test_latest_holdout_error_corrects_raw_next_day_forecast() -> None:
   points = [
       BacktestPoint(
           date=date(2026, 1, 1),
           actual=110,
           p10=100,
           p50=105,
-          p90=108,
+          p90=110,
       ),
       BacktestPoint(
           date=date(2026, 1, 2),
-          actual=120,
-          p10=110,
-          p50=115,
-          p90=118,
+          actual=100,
+          p10=105,
+          p50=112,
+          p90=120,
       ),
   ]
 
-  bias = forecast_bias(points)
-  corrected = apply_forecast_bias(
-      ModelForecast(p10=[90, 95], p50=[100, 105], p90=[110, 115]),
-      bias,
+  correction = calculate_forecast_correction(points)
+  corrected = apply_forecast_correction(
+      ModelForecast(p10=[100], p50=[110], p90=[120]),
+      correction,
   )
 
-  assert bias == 5
-  assert corrected.p10 == [95, 100]
-  assert corrected.p50 == [105, 110]
-  assert corrected.p90 == [115, 120]
+  assert correction.reference_date == date(2026, 1, 2)
+  assert correction.signed_median_error_percent == pytest.approx(12)
+  assert correction.scale_factor == pytest.approx(100 / 112)
+  assert corrected.p10 == pytest.approx([89.285714])
+  assert corrected.p50 == pytest.approx([98.214286])
+  assert corrected.p90 == pytest.approx([107.142857])
+  assert corrected.p10[0] < corrected.p50[0] < corrected.p90[0]
+  assert corrected.p50[0] < points[-1].actual

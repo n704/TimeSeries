@@ -35,6 +35,7 @@ spec.md        Product and technical specification
 - [AI agent guide](./AGENTS.md)
 - [Backend guide](./backend/README.md)
 - [Frontend guide](./frontend/README.md)
+- [Forecast calculation](./FORECAST_CALCULATION.md)
 - [Deployment guide](./DEPLOYMENT.md)
 - [Product and technical specification](./spec.md)
 
@@ -248,10 +249,12 @@ directional accuracy, and whether the modeled end direction matched the known
 holdout. It is a single historical holdout, not a guarantee of future accuracy.
 
 Forecast responses automatically include the same isolated holdout evidence
-when at least 127 valid observations are available. The analysis also compares
-the TimesFM median direction with the latest five-session adjusted-close move.
-These checks qualify the evidence shown to the user; they never alter or replace
-the raw TimesFM p10, p50, or p90 values.
+when at least 127 valid observations are available. The latest holdout
+actual-to-median ratio scales every future p10, p50, and p90 value, including
+the next session. The response exposes the signed median error and scale factor.
+The analysis also compares the corrected median direction with the latest
+five-session adjusted-close move. See
+[Forecast calculation](./FORECAST_CALCULATION.md) for the formulas and limits.
 
 Example index research screen:
 

@@ -106,8 +106,9 @@ Maintain these rules when refactoring state or adopting a server-state library.
 
 ## Forecast evidence
 
-The primary forecast keeps TimesFM p10, p50, and p90 values unchanged. Its
-evidence panel separately shows:
+When enough history is available, the primary forecast multiplies TimesFM p10,
+p50, and p90 by the latest isolated holdout's `actual / p50` ratio. The
+evidence panel shows the signed latest error and applied adjustment alongside:
 
 - the latest five-session adjusted-close move and whether it aligns with the
   modeled direction;
@@ -117,7 +118,8 @@ evidence panel separately shows:
 
 The panel labels the combined evidence as supportive, mixed, or limited. These
 labels describe historical support for the displayed outlook, not a probability
-of success or a recommendation.
+of success or a recommendation. The detailed calculation and its limits are in
+[Forecast calculation](../FORECAST_CALCULATION.md).
 
 ## Chart contract
 

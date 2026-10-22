@@ -39,10 +39,18 @@ export interface BacktestMetrics {
   end_direction_match: boolean;
 }
 
+export interface ForecastCorrection {
+  method: "latest_holdout_ratio";
+  reference_date: string;
+  signed_median_error_percent: number;
+  scale_factor: number;
+}
+
 export interface HistoricalEvaluation {
   holdout_sessions: number;
   context_end_date: string;
   metrics: BacktestMetrics;
+  correction?: ForecastCorrection | null;
 }
 
 export interface ForecastAnalysis {
@@ -102,6 +110,7 @@ export interface IndexScreenResult {
   final_p90: number;
   final_interval_width_percent: number;
   is_data_stale: boolean;
+  correction?: ForecastCorrection | null;
 }
 
 export interface IndexScreenResponse {

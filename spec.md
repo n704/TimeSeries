@@ -159,7 +159,7 @@ the provider returns one unique active listing.
   `float32`.
 - `FR-FORECAST-04`: Request point forecasts and quantiles. Return the median
   (`p50`) as the primary prediction and `p10`/`p90` as the displayed prediction
-  interval.
+  interval after applying the documented back-check correction when available.
 - `FR-FORECAST-05`: Map forecast steps to the next valid exchange sessions
   using an exchange calendar. Do not label weekends or exchange holidays as
   forecast dates.
@@ -172,9 +172,10 @@ the provider returns one unique active listing.
   it as TimesFM output.
 - `FR-FORECAST-09`: When at least 127 valid observations are available, each
   forecast also runs an isolated seven-session holdout using context that ends
-  before all seven known closes. Holdout error and recent-trend checks may
-  qualify the evidence shown with the outlook, but must not modify TimesFM's
-  returned p10, p50, or p90 values.
+  before all seven known closes. The latest holdout's `actual / p50` ratio must
+  scale every future p10, p50, and p90 value. The raw holdout values must remain
+  unchanged for evaluation, and the response must expose the reference date,
+  signed median error, and scale factor.
 
 ### 5.5 Historical back-check
 
@@ -207,6 +208,8 @@ forecast values:
   or neutral relative to the TimesFM median direction.
 - 20-session and 50-session simple moving averages.
 - Forecast end price and percentage change from the latest close.
+- Latest-holdout correction method, reference date, signed median error, and
+  scale factor when an isolated holdout is available.
 - Trend label:
   - `upward` when forecast change is greater than `+1%`;
   - `downward` when forecast change is less than `-1%`;
@@ -733,6 +736,12 @@ Success, `200`:
         "interval_coverage_percent": 85.71,
         "directional_accuracy_percent": 71.43,
         "end_direction_match": true
+      },
+      "correction": {
+        "method": "latest_holdout_ratio",
+        "reference_date": "2026-10-16",
+        "signed_median_error_percent": 1.2,
+        "scale_factor": 0.988142
       }
     },
     "sma_20": 1195.18,
@@ -753,7 +762,7 @@ Success, `200`:
     "generated_at": "2026-10-17T12:41:03Z",
     "is_data_stale": false
   },
-  "disclaimer": "This forecast is an uncertain statistical estimate for informational purposes only and is not financial advice."
+  "disclaimer": "This forecast is an uncertain statistical estimate for informational purposes only and is not financial advice. Back-check correction cannot guarantee accuracy or prevent loss."
 }
 ```
 
@@ -817,8 +826,10 @@ Success, `200`:
 }
 ```
 
-The response always contains exactly seven points. The context end date must
-precede the first returned point.
+The response always contains exactly seven raw, uncorrected points. The context
+end date must precede the first returned point. A normal forecast response uses
+the final point's `actual / p50` ratio to correct its future quantiles; the
+back-check response itself remains unchanged.
 
 ### 10.5 Screen positive index forecasts
 
@@ -840,6 +851,8 @@ change. Metadata includes the selected index name, universe size, analyzed
 count, positive count, and symbols unavailable because provider data was
 missing, unsupported, or too short. Each result includes latest close, forecast
 end, end date, p10, p50, p90, interval width, and data freshness.
+Each result also includes its latest-holdout correction or `null` when only
+120-126 observations are available.
 
 This endpoint is a neutral research screen. It does not produce a buy, sell, or
 hold recommendation.
@@ -1079,9 +1092,10 @@ The MVP is complete only when:
 14. A user can back-check the latest seven sessions, inspect actual versus
     predicted prices, inspect error and directional metrics, and confirm that
     the model context ends before the holdout.
-15. Every forecast with enough history identifies when its TimesFM direction
-    opposes the latest five-session move and qualifies the outlook using the
-    isolated holdout without changing model quantiles.
+15. Every forecast with enough history identifies when its corrected TimesFM
+    direction opposes the latest five-session move and applies the disclosed
+    latest-holdout ratio to all future model quantiles without altering the raw
+    holdout evidence.
 
 ## 18. References
 

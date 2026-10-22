@@ -94,8 +94,18 @@ def analyze_forecast(
       "downward": "below",
       "mostly_flat": "near",
   }[trend]
+  correction = (
+      historical_evaluation.correction
+      if historical_evaluation is not None
+      else None
+  )
+  forecast_subject = (
+      "The back-check-corrected TimesFM median forecast"
+      if correction is not None
+      else "TimesFM's median forecast"
+  )
   summary_parts = [
-      f"TimesFM's median forecast is {abs(change):.1f}% {direction_text} the latest "
+      f"{forecast_subject} is {abs(change):.1f}% {direction_text} the latest "
       f"adjusted close over the next {len(forecast)} trading sessions. The p10-p90 "
       "range shows uncertainty, which may widen further into the forecast."
   ]
@@ -119,6 +129,22 @@ def analyze_forecast(
     direction_result = (
         "matched" if metrics.end_direction_match else "did not match"
     )
+    if correction is not None:
+      error_direction = (
+          "above"
+          if correction.signed_median_error_percent > 0
+          else "below"
+          if correction.signed_median_error_percent < 0
+          else "at"
+      )
+      adjustment_percent = (correction.scale_factor - 1) * 100
+      summary_parts.append(
+          "The latest holdout median was "
+          f"{abs(correction.signed_median_error_percent):.1f}% "
+          f"{error_direction} its known close on {correction.reference_date}; "
+          f"a {correction.scale_factor:.4f} scale "
+          f"({adjustment_percent:+.1f}%) was applied to every future quantile."
+      )
     summary_parts.append(
         f"In the isolated {historical_evaluation.holdout_sessions}-session "
         "back-check, the median path's mean absolute percentage error was "

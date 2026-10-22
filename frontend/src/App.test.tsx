@@ -98,6 +98,12 @@ const forecastResponse = {
         directional_accuracy_percent: 71.43,
         end_direction_match: true,
       },
+      correction: {
+        method: "latest_holdout_ratio" as const,
+        reference_date: "2026-10-16",
+        signed_median_error_percent: 2,
+        scale_factor: 1 / 1.02,
+      },
     },
     sma_20: 1200,
     sma_50: 1180,
@@ -138,6 +144,12 @@ const indexScreenResponse = {
     final_p90: 120,
     final_interval_width_percent: 22.73,
     is_data_stale: false,
+    correction: {
+      method: "latest_holdout_ratio" as const,
+      reference_date: "2026-10-16",
+      signed_median_error_percent: 2,
+      scale_factor: 1 / 1.02,
+    },
   })),
   metadata: {
     index_id: "nifty_midcap_select",
@@ -327,6 +339,28 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the holdout correction applied to forecast values", async () => {
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /back-check-corrected timesfm forecast/i,
+      }),
+    ).toBeInTheDocument();
+    const evidence = screen.getByRole("region", {
+      name: /accuracy and recent-pattern check/i,
+    });
+    expect(
+      within(evidence).getByText(/applied back-check adjustment/i),
+    ).toBeInTheDocument();
+    expect(within(evidence).getByText("-1.96%")).toBeInTheDocument();
+    expect(
+      within(evidence).getByText(
+        /latest holdout median error was \+2\.00%.*multiplied by 0\.9804/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("re-runs the selected NIFTY 50 prediction from the button", async () => {
     render(<App />);
     await waitFor(() => expect(apiMocks.createForecast).toHaveBeenCalledTimes(1));
@@ -362,7 +396,7 @@ describe("App", () => {
     });
     expect(
       screen.getByRole("table", {
-        name: /highest positive timesfm median changes/i,
+        name: /highest positive timesfm median changes with adjustment status/i,
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("+10.00%")).toBeInTheDocument();

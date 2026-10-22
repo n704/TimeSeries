@@ -1,7 +1,13 @@
 from collections.abc import Sequence
+from math import isfinite
 from statistics import fmean
 
-from app.schemas import BacktestMetrics, BacktestPoint, PricePoint
+from app.schemas import (
+    BacktestMetrics,
+    BacktestPoint,
+    ForecastCorrection,
+    PricePoint,
+)
 from app.services.forecast import ModelForecast
 
 
@@ -71,24 +77,48 @@ def evaluate_backtest(
   )
 
 
-def forecast_bias(points: Sequence[BacktestPoint]) -> float:
-  """Return the mean signed holdout error, positive when forecasts ran low."""
+def calculate_forecast_correction(
+    points: Sequence[BacktestPoint],
+) -> ForecastCorrection:
+  """Calculate a level correction from the latest known holdout residual."""
   if not points:
     raise ValueError("Back-check points must not be empty.")
-  return fmean(point.actual - point.p50 for point in points)
+  latest = points[-1]
+  scale_factor = latest.actual / latest.p50
+  signed_error_percent = ((latest.p50 / latest.actual) - 1) * 100
+  if not isfinite(scale_factor) or not isfinite(signed_error_percent):
+    raise ValueError("Back-check correction must be finite.")
+  return ForecastCorrection(
+      reference_date=latest.date,
+      signed_median_error_percent=signed_error_percent,
+      scale_factor=scale_factor,
+  )
 
 
-def apply_forecast_bias(forecast: ModelForecast, bias: float) -> ModelForecast:
-  """Shift all forecast quantiles by a holdout-derived signed bias."""
+def apply_forecast_correction(
+    forecast: ModelForecast,
+    correction: ForecastCorrection,
+) -> ModelForecast:
+  """Scale all forecast quantiles by the latest holdout correction."""
   corrected = ModelForecast(
-      p10=[value + bias for value in forecast.p10],
-      p50=[value + bias for value in forecast.p50],
-      p90=[value + bias for value in forecast.p90],
+      p10=[value * correction.scale_factor for value in forecast.p10],
+      p50=[value * correction.scale_factor for value in forecast.p50],
+      p90=[value * correction.scale_factor for value in forecast.p90],
   )
   if any(
-      value <= 0
+      not isfinite(value) or value <= 0
       for values in (corrected.p10, corrected.p50, corrected.p90)
       for value in values
   ):
     raise ValueError("Back-check correction produced non-positive forecast values.")
+  if any(
+      p10 > p50 or p50 > p90
+      for p10, p50, p90 in zip(
+          corrected.p10,
+          corrected.p50,
+          corrected.p90,
+          strict=True,
+      )
+  ):
+    raise ValueError("Back-check correction produced unordered forecast quantiles.")
   return corrected

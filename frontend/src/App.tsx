@@ -451,6 +451,7 @@ export default function App() {
   const researchSignal = forecast ? getResearchSignal(forecast) : null;
   const historicalEvaluation =
     forecast?.analysis.historical_evaluation ?? null;
+  const forecastCorrection = historicalEvaluation?.correction ?? null;
   const selectedPosition = selected
     ? positions.find((position) => position.security.symbol === selected.symbol)
     : undefined;
@@ -960,14 +961,17 @@ export default function App() {
                 <div className="forecast-overview-copy">
                   <div className="forecast-chip-row">
                     <p className={`trend-chip ${forecast.analysis.trend}`}>
-                      TimesFM median: {forecast.analysis.trend.replace("_", " ")}
+                      {forecastCorrection ? "Corrected" : "TimesFM"} median:{" "}
+                      {forecast.analysis.trend.replace("_", " ")}
                     </p>
                     <p className={`trend-chip evidence-${forecast.analysis.evidence_level}`}>
                       Evidence: {forecast.analysis.evidence_level}
                     </p>
                   </div>
                   <h2 id="forecast-result" ref={resultHeadingRef} tabIndex={-1}>
-                    TimesFM forecast
+                    {forecastCorrection
+                      ? "Back-check-corrected TimesFM forecast"
+                      : "TimesFM forecast"}
                   </h2>
                   <p>{forecast.analysis.summary}</p>
                 </div>
@@ -1049,6 +1053,16 @@ export default function App() {
                         : "Unavailable"}
                     </strong>
                   </article>
+                  <article>
+                    <span>Applied back-check adjustment</span>
+                    <strong>
+                      {forecastCorrection
+                        ? formatPercent(
+                            (forecastCorrection.scale_factor - 1) * 100,
+                          )
+                        : "Unavailable"}
+                    </strong>
+                  </article>
                 </div>
                 <p className="evidence-note">
                   {historicalEvaluation
@@ -1056,7 +1070,13 @@ export default function App() {
                         historicalEvaluation.metrics.end_direction_match
                           ? "matched"
                           : "did not match"
-                      } the known result. These measures describe one historical window, not future certainty.`
+                      } the known result. ${
+                        forecastCorrection
+                          ? `The latest holdout median error was ${formatPercent(
+                              forecastCorrection.signed_median_error_percent,
+                            )} on ${forecastCorrection.reference_date}; every future quantile was multiplied by ${forecastCorrection.scale_factor.toFixed(4)}.`
+                          : "No back-check correction metadata was returned."
+                      } These measures describe one historical window, not future certainty.`
                     : "There is enough history to forecast, but not enough earlier data for an isolated seven-session holdout. Evidence remains limited."}
                 </p>
               </section>
@@ -1276,7 +1296,9 @@ export default function App() {
                   <div className="forecast-details screen-table">
                     <div className="table-scroll">
                       <table>
-                        <caption>Highest positive TimesFM median changes</caption>
+                        <caption>
+                          Highest positive TimesFM median changes with adjustment status
+                        </caption>
                         <thead>
                           <tr>
                             <th>Rank</th>
@@ -1311,6 +1333,13 @@ export default function App() {
                               </td>
                               <td className="positive">
                                 {formatPercent(result.forecast_change_percent)}
+                                <small>
+                                  {result.correction
+                                    ? `${formatPercent(
+                                        (result.correction.scale_factor - 1) * 100,
+                                      )} back-check adjustment`
+                                    : "No back-check adjustment"}
+                                </small>
                               </td>
                               <td>
                                 {formatPrice(result.final_p10, result.security.currency)}
@@ -1476,6 +1505,16 @@ export default function App() {
                         <div><dt>Backend</dt><dd>{forecast.metadata.backend}</dd></div>
                         <div><dt>Context</dt><dd>{forecast.metadata.context_observations} sessions</dd></div>
                         <div><dt>Data source</dt><dd>{forecast.metadata.provider}</dd></div>
+                        <div>
+                          <dt>Back-check correction</dt>
+                          <dd>
+                            {forecastCorrection
+                              ? `${formatPercent(
+                                  (forecastCorrection.scale_factor - 1) * 100,
+                                )} using ${forecastCorrection.method}`
+                              : "Not applied"}
+                          </dd>
+                        </div>
                       </dl>
                     </div>
                     <div className="table-scroll">
