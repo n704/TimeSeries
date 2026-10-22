@@ -159,7 +159,7 @@ the provider returns one unique active listing.
   `float32`.
 - `FR-FORECAST-04`: Request point forecasts and quantiles. Return the median
   (`p50`) as the primary prediction and `p10`/`p90` as the displayed prediction
-  interval.
+  interval after applying the documented back-check correction when available.
 - `FR-FORECAST-05`: Map forecast steps to the next valid exchange sessions
   using an exchange calendar. Do not label weekends or exchange holidays as
   forecast dates.
@@ -172,9 +172,10 @@ the provider returns one unique active listing.
   it as TimesFM output.
 - `FR-FORECAST-09`: When at least 127 valid observations are available, each
   forecast also runs an isolated seven-session holdout using context that ends
-  before all seven known closes. Holdout error and recent-trend checks may
-  qualify the evidence shown with the outlook, but must not modify TimesFM's
-  returned p10, p50, or p90 values.
+  before all seven known closes. The latest holdout's `actual / p50` ratio must
+  scale every future p10, p50, and p90 value. The raw holdout values must remain
+  unchanged for evaluation, and the response must expose the reference date,
+  signed median error, and scale factor.
 
 ### 5.5 Historical back-check
 
@@ -207,6 +208,8 @@ forecast values:
   or neutral relative to the TimesFM median direction.
 - 20-session and 50-session simple moving averages.
 - Forecast end price and percentage change from the latest close.
+- Latest-holdout correction method, reference date, signed median error, and
+  scale factor when an isolated holdout is available.
 - Trend label:
   - `upward` when forecast change is greater than `+1%`;
   - `downward` when forecast change is less than `-1%`;
@@ -314,6 +317,10 @@ The MVP is a single-page application with these regions:
    - Add or remove the selected security from a watchlist.
    - Add, update, or remove a paper position with quantity and average price.
    - Show cost basis, snapshot market value, and unrealized change.
+   - Save the latest available adjusted close for each paper position after
+     6:00 PM Asia/Kolkata, keyed by its actual exchange market date.
+   - Show the latest daily price and position-value change plus an expandable
+     table of saved per-session changes.
    - Let users select a 7-, 20-, or 60-session portfolio outlook. Show the
      selected future session's p50 price and p10-p90 range when that forecast
      point has been generated.
@@ -733,6 +740,12 @@ Success, `200`:
         "interval_coverage_percent": 85.71,
         "directional_accuracy_percent": 71.43,
         "end_direction_match": true
+      },
+      "correction": {
+        "method": "latest_holdout_ratio",
+        "reference_date": "2026-10-16",
+        "signed_median_error_percent": 1.2,
+        "scale_factor": 0.988142
       }
     },
     "sma_20": 1195.18,
@@ -753,7 +766,7 @@ Success, `200`:
     "generated_at": "2026-10-17T12:41:03Z",
     "is_data_stale": false
   },
-  "disclaimer": "This forecast is an uncertain statistical estimate for informational purposes only and is not financial advice."
+  "disclaimer": "This forecast is an uncertain statistical estimate for informational purposes only and is not financial advice. Back-check correction cannot guarantee accuracy or prevent loss."
 }
 ```
 
@@ -817,8 +830,10 @@ Success, `200`:
 }
 ```
 
-The response always contains exactly seven points. The context end date must
-precede the first returned point.
+The response always contains exactly seven raw, uncorrected points. The context
+end date must precede the first returned point. A normal forecast response uses
+the final point's `actual / p50` ratio to correct its future quantiles; the
+back-check response itself remains unchanged.
 
 ### 10.5 Screen positive index forecasts
 
@@ -840,6 +855,8 @@ change. Metadata includes the selected index name, universe size, analyzed
 count, positive count, and symbols unavailable because provider data was
 missing, unsupported, or too short. Each result includes latest close, forecast
 end, end date, p10, p50, p90, interval width, and data freshness.
+Each result also includes its latest-holdout correction or `null` when only
+120-126 observations are available.
 
 This endpoint is a neutral research screen. It does not produce a buy, sell, or
 hold recommendation.
@@ -847,14 +864,26 @@ hold recommendation.
 ### 10.6 Saved tracking state
 
 - `GET /api/v1/tracking` returns the saved watchlist, paper positions, forecast
-  outlook maps, and database update timestamp.
+  outlook maps, up to 30 server-managed price snapshots per position, and the
+  database update timestamp.
 - `PUT /api/v1/tracking` validates and atomically replaces the complete
-  single-user tracking state.
+  single-user tracking state. Client payloads cannot replace server-managed
+  price history.
 
 The API permits at most 20 unique watchlist symbols and 20 unique position
 symbols. Quantities, prices, and forecast quantiles must be finite and positive;
 every outlook must satisfy `p10 <= p50 <= p90`. Supported outlook keys are
 exactly `7`, `20`, and `60`.
+
+The local API process runs one background portfolio snapshot worker. From 6:00
+PM until midnight Asia/Kolkata it captures uncaptured positions and rechecks
+failures or newly added positions every five minutes. A process started during
+that window catches up immediately. For each current position it fetches
+provider history and upserts the latest adjusted close into
+`portfolio_price_snapshots` with `(symbol, market_date)` as the primary key.
+This prevents weekends, holidays, or restarts from creating duplicate or
+synthetic prices. A provider failure is logged and leaves that symbol unchanged.
+Removing a position removes its snapshot history.
 
 ### 10.7 Health endpoints
 
@@ -928,6 +957,9 @@ load:
 - The MVP stores no user profile. Watchlist and paper portfolio data are stored
   in a single-user local SQLite database and are not synchronized to an account
   or brokerage.
+- Portfolio price snapshots contain only canonical symbols, market dates,
+  adjusted closes, and capture timestamps. They remain in the configured local
+  SQLite database.
 - Do not log credentials or complete upstream response payloads.
 
 ## 13. Development diagnostics
@@ -1079,9 +1111,13 @@ The MVP is complete only when:
 14. A user can back-check the latest seven sessions, inspect actual versus
     predicted prices, inspect error and directional metrics, and confirm that
     the model context ends before the holdout.
-15. Every forecast with enough history identifies when its TimesFM direction
-    opposes the latest five-session move and qualifies the outlook using the
-    isolated holdout without changing model quantiles.
+15. Every forecast with enough history identifies when its corrected TimesFM
+    direction opposes the latest five-session move and applies the disclosed
+    latest-holdout ratio to all future model quantiles without altering the raw
+    holdout evidence.
+16. While the local API is running, paper positions are captured after 6:00 PM
+    Asia/Kolkata, duplicate market dates are upserted, and the tracker displays
+    latest and historical per-session changes without implying live prices.
 
 ## 18. References
 

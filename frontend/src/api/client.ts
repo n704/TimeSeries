@@ -26,6 +26,12 @@ interface ApiPortfolioOutlook {
   generated_at: string;
 }
 
+interface ApiPortfolioPriceSnapshot {
+  date: string;
+  adjusted_close: number;
+  captured_at: string;
+}
+
 interface ApiWatchlistItem {
   security: Security;
   latest_close: number;
@@ -40,6 +46,7 @@ interface ApiPortfolioPosition {
   latest_close: number;
   last_market_date: string;
   outlooks: Partial<Record<"7" | "20" | "60", ApiPortfolioOutlook>>;
+  price_history?: ApiPortfolioPriceSnapshot[];
   updated_at: string;
 }
 
@@ -179,6 +186,11 @@ function fromApiTrackingState(state: ApiTrackingState): TrackingStateResponse {
         latestClose: position.latest_close,
         lastMarketDate: position.last_market_date,
         outlooks: fromApiOutlooks(position.outlooks),
+        priceHistory: (position.price_history ?? []).map((snapshot) => ({
+          date: snapshot.date,
+          adjustedClose: snapshot.adjusted_close,
+          capturedAt: snapshot.captured_at,
+        })),
         updatedAt: position.updated_at,
       }),
     ),

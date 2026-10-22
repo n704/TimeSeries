@@ -98,6 +98,12 @@ const forecastResponse = {
         directional_accuracy_percent: 71.43,
         end_direction_match: true,
       },
+      correction: {
+        method: "latest_holdout_ratio" as const,
+        reference_date: "2026-10-16",
+        signed_median_error_percent: 2,
+        scale_factor: 1 / 1.02,
+      },
     },
     sma_20: 1200,
     sma_50: 1180,
@@ -138,6 +144,12 @@ const indexScreenResponse = {
     final_p90: 120,
     final_interval_width_percent: 22.73,
     is_data_stale: false,
+    correction: {
+      method: "latest_holdout_ratio" as const,
+      reference_date: "2026-10-16",
+      signed_median_error_percent: 2,
+      scale_factor: 1 / 1.02,
+    },
   })),
   metadata: {
     index_id: "nifty_midcap_select",
@@ -327,6 +339,28 @@ describe("App", () => {
     ).toBeInTheDocument();
   });
 
+  it("shows the holdout correction applied to forecast values", async () => {
+    render(<App />);
+
+    expect(
+      await screen.findByRole("heading", {
+        name: /back-check-corrected timesfm forecast/i,
+      }),
+    ).toBeInTheDocument();
+    const evidence = screen.getByRole("region", {
+      name: /accuracy and recent-pattern check/i,
+    });
+    expect(
+      within(evidence).getByText(/applied back-check adjustment/i),
+    ).toBeInTheDocument();
+    expect(within(evidence).getByText("-1.96%")).toBeInTheDocument();
+    expect(
+      within(evidence).getByText(
+        /latest holdout median error was \+2\.00%.*multiplied by 0\.9804/i,
+      ),
+    ).toBeInTheDocument();
+  });
+
   it("re-runs the selected NIFTY 50 prediction from the button", async () => {
     render(<App />);
     await waitFor(() => expect(apiMocks.createForecast).toHaveBeenCalledTimes(1));
@@ -362,7 +396,7 @@ describe("App", () => {
     });
     expect(
       screen.getByRole("table", {
-        name: /highest positive timesfm median changes/i,
+        name: /highest positive timesfm median changes with adjustment status/i,
       }),
     ).toBeInTheDocument();
     expect(screen.getByText("+10.00%")).toBeInTheDocument();
@@ -662,6 +696,66 @@ describe("App", () => {
         }),
       ),
     );
+  });
+
+  it("displays saved end-of-day portfolio changes", async () => {
+    apiMocks.getTrackingState.mockResolvedValue({
+      watchlist: [],
+      positions: [
+        {
+          security,
+          quantity: 2,
+          averagePrice: 1000,
+          latestClose: 110,
+          lastMarketDate: "2026-10-22",
+          outlooks: {
+            7: {
+              date: "2026-11-07",
+              p10: 100,
+              p50: 115,
+              p90: 125,
+              generatedAt: "2026-10-22T12:30:00Z",
+            },
+          },
+          priceHistory: [
+            {
+              date: "2026-10-21",
+              adjustedClose: 100,
+              capturedAt: "2026-10-21T12:30:00Z",
+            },
+            {
+              date: "2026-10-22",
+              adjustedClose: 110,
+              capturedAt: "2026-10-22T12:30:00Z",
+            },
+          ],
+          updatedAt: "2026-10-22T12:30:00Z",
+        },
+      ],
+      updatedAt: "2026-10-22T12:30:00Z",
+    });
+
+    render(<App />);
+    fireEvent.click(
+      screen.getByRole("tab", { name: /watchlist & portfolio/i }),
+    );
+
+    expect(
+      await screen.findByText(/latest daily move/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/\+10\.00% · 1 of 1 through 2026-10-22/i)).toBeInTheDocument();
+    const portfolioTable = screen.getByRole("table", {
+      name: /locally saved paper portfolio positions/i,
+    });
+    expect(within(portfolioTable).getByText(/\+10\.00% price/i)).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByText(/view saved daily price changes/i),
+    );
+    const historyTable = screen.getByRole("table", {
+      name: /saved end-of-day portfolio price changes/i,
+    });
+    expect(within(historyTable).getByText("2026-10-22")).toBeInTheDocument();
+    expect(within(historyTable).getByText(/\+10\.00% from 2026-10-21/i)).toBeInTheDocument();
   });
 
   it("automatically forecasts portfolio positions missing the selected horizon", async () => {

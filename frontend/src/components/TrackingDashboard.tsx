@@ -33,6 +33,35 @@ function formatPercent(value: number): string {
   return `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
 }
 
+interface DailyMovement {
+  symbol: string;
+  date: string;
+  previousDate: string;
+  adjustedClose: number;
+  priceChange: number;
+  priceChangePercent: number;
+  positionChange: number;
+  position: PortfolioPosition;
+}
+
+function getDailyMovements(position: PortfolioPosition): DailyMovement[] {
+  const history = position.priceHistory ?? [];
+  return history.slice(1).map((snapshot, index) => {
+    const previous = history[index];
+    const priceChange = snapshot.adjustedClose - previous.adjustedClose;
+    return {
+      symbol: position.security.symbol,
+      date: snapshot.date,
+      previousDate: previous.date,
+      adjustedClose: snapshot.adjustedClose,
+      priceChange,
+      priceChangePercent: (priceChange / previous.adjustedClose) * 100,
+      positionChange: priceChange * position.quantity,
+      position,
+    };
+  });
+}
+
 export function TrackingDashboard({
   watchlist,
   positions,
@@ -58,6 +87,37 @@ export function TrackingDashboard({
   );
   const change = marketValue - totalCost;
   const changePercent = totalCost ? (change / totalCost) * 100 : 0;
+  const dailyHistory = positions
+    .flatMap(getDailyMovements)
+    .sort(
+      (left, right) =>
+        right.date.localeCompare(left.date) ||
+        left.symbol.localeCompare(right.symbol),
+    );
+  const latestDailyDate = dailyHistory[0]?.date ?? null;
+  const latestDailyMovements = latestDailyDate
+    ? dailyHistory.filter((movement) => movement.date === latestDailyDate)
+    : [];
+  const latestDailyChange = latestDailyMovements.reduce(
+    (sum, movement) => sum + movement.positionChange,
+    0,
+  );
+  const previousDailyValue = latestDailyMovements.reduce(
+    (sum, movement) =>
+      sum +
+      (movement.adjustedClose - movement.priceChange) *
+        movement.position.quantity,
+    0,
+  );
+  const latestDailyChangePercent = previousDailyValue
+    ? (latestDailyChange / previousDailyValue) * 100
+    : 0;
+  const latestMovementBySymbol = new Map(
+    positions.flatMap(getDailyMovements).map((movement) => [
+      movement.symbol,
+      movement,
+    ]),
+  );
   const forecastedPositions = positions.filter(
     (position) => position.outlooks?.[outlookHorizon] !== undefined,
   );
@@ -84,7 +144,8 @@ export function TrackingDashboard({
           <h1>Your market, <span>in one view.</span></h1>
           <p>
             Save stocks for later and track paper positions using adjusted
-            closes and a probabilistic 7-session TimesFM outlook.
+            closes, daily 6 PM price snapshots, and probabilistic TimesFM
+            outlooks.
           </p>
         </div>
         <div className="privacy-card">
@@ -173,6 +234,30 @@ export function TrackingDashboard({
                   {formatPercent(changePercent)}
                 </strong>
               </article>
+              <article>
+                <span>Latest daily move</span>
+                {latestDailyDate ? (
+                  <>
+                    <strong
+                      className={
+                        latestDailyChange >= 0 ? "positive" : "negative"
+                      }
+                    >
+                      {formatPrice(latestDailyChange, "INR")}
+                    </strong>
+                    <small>
+                      {formatPercent(latestDailyChangePercent)} ·{" "}
+                      {latestDailyMovements.length} of {positions.length} through{" "}
+                      {latestDailyDate}
+                    </small>
+                  </>
+                ) : (
+                  <>
+                    <strong>Pending</strong>
+                    <small>Two saved market closes are required</small>
+                  </>
+                )}
+              </article>
               <article className="projected-value">
                 <span>Projected value · {outlookHorizon} sessions</span>
                 <strong>
@@ -198,6 +283,7 @@ export function TrackingDashboard({
                     <th>Quantity</th>
                     <th>Average price</th>
                     <th>Last close</th>
+                    <th>Daily move</th>
                     <th>{outlookHorizon}-session forecast</th>
                     <th>Projected value</th>
                     <th>Market value</th>
@@ -208,6 +294,9 @@ export function TrackingDashboard({
                 <tbody>
                   {positions.map((position) => {
                     const outlook = position.outlooks?.[outlookHorizon];
+                    const dailyMovement = latestMovementBySymbol.get(
+                      position.security.symbol,
+                    );
                     const positionCost = position.quantity * position.averagePrice;
                     const positionValue = position.quantity * position.latestClose;
                     const positionChange =
@@ -236,6 +325,34 @@ export function TrackingDashboard({
                         <td>
                           {formatPrice(position.latestClose, position.security.currency)}
                           <small>{position.lastMarketDate}</small>
+                        </td>
+                        <td>
+                          {dailyMovement ? (
+                            <>
+                              <strong
+                                className={
+                                  dailyMovement.positionChange >= 0
+                                    ? "positive"
+                                    : "negative"
+                                }
+                              >
+                                {formatPrice(
+                                  dailyMovement.positionChange,
+                                  position.security.currency,
+                                )}
+                              </strong>
+                              <small>
+                                {formatPercent(
+                                  dailyMovement.priceChangePercent,
+                                )}{" "}
+                                price · {dailyMovement.date}
+                              </small>
+                            </>
+                          ) : (
+                            <span className="forecast-pending">
+                              After two saved closes
+                            </span>
+                          )}
                         </td>
                         <td className="forecast-cell">
                           {outlook ? (
@@ -300,6 +417,65 @@ export function TrackingDashboard({
                 </tbody>
               </table>
             </div>
+            {dailyHistory.length > 0 && (
+              <details className="forecast-details portfolio-history">
+                <summary>View saved daily price changes</summary>
+                <div className="table-scroll">
+                  <table>
+                    <caption>Saved end-of-day portfolio price changes</caption>
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Stock</th>
+                        <th>Adjusted close</th>
+                        <th>Price move</th>
+                        <th>Position move</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {dailyHistory.slice(0, 100).map((movement) => (
+                        <tr key={`${movement.symbol}-${movement.date}`}>
+                          <td>{movement.date}</td>
+                          <td>{movement.symbol}</td>
+                          <td>
+                            {formatPrice(
+                              movement.adjustedClose,
+                              movement.position.security.currency,
+                            )}
+                          </td>
+                          <td
+                            className={
+                              movement.priceChange >= 0 ? "positive" : "negative"
+                            }
+                          >
+                            {formatPrice(
+                              movement.priceChange,
+                              movement.position.security.currency,
+                            )}
+                            <small>
+                              {formatPercent(movement.priceChangePercent)} from{" "}
+                              {movement.previousDate}
+                            </small>
+                          </td>
+                          <td
+                            className={
+                              movement.positionChange >= 0
+                                ? "positive"
+                                : "negative"
+                            }
+                          >
+                            {formatPrice(
+                              movement.positionChange,
+                              movement.position.security.currency,
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </details>
+            )}
           </>
         ) : (
           <div className="tracking-empty">
@@ -356,9 +532,12 @@ export function TrackingDashboard({
       </section>
 
       <p className="tracking-disclaimer">
-        Values and selected-horizon p10-p90 forecasts are local research
-        snapshots, not live quotes, guarantees, or brokerage records. This
-        feature does not place orders or provide investment advice.
+        Daily prices are saved locally after 6:00 PM Asia/Kolkata using the
+        provider's latest available exchange-session adjusted close; weekends
+        and holidays do not create synthetic market prices. Values and
+        selected-horizon p10-p90 forecasts are not live quotes, guarantees, or
+        brokerage records. This feature does not place orders or provide
+        investment advice.
       </p>
     </section>
   );

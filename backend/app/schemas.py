@@ -64,10 +64,18 @@ class BacktestMetrics(BaseModel):
   end_direction_match: bool
 
 
+class ForecastCorrection(BaseModel):
+  method: Literal["latest_holdout_ratio"] = "latest_holdout_ratio"
+  reference_date: date
+  signed_median_error_percent: float
+  scale_factor: float = Field(gt=0)
+
+
 class HistoricalEvaluation(BaseModel):
   holdout_sessions: int = Field(ge=1)
   context_end_date: date
   metrics: BacktestMetrics
+  correction: ForecastCorrection | None = None
 
 
 class Analysis(BaseModel):
@@ -133,6 +141,7 @@ class IndexScreenResult(BaseModel):
   final_p90: float = Field(gt=0)
   final_interval_width_percent: float = Field(ge=0)
   is_data_stale: bool
+  correction: ForecastCorrection | None = None
 
 
 class IndexScreenMetadata(BaseModel):
@@ -224,6 +233,16 @@ class PortfolioPosition(BaseModel):
   updated_at: datetime
 
 
+class PortfolioPriceSnapshot(BaseModel):
+  date: date
+  adjusted_close: float = Field(gt=0)
+  captured_at: datetime
+
+
+class PortfolioPositionResponse(PortfolioPosition):
+  price_history: list[PortfolioPriceSnapshot] = Field(default_factory=list)
+
+
 class TrackingState(BaseModel):
   watchlist: list[WatchlistItem] = Field(default_factory=list, max_length=20)
   positions: list[PortfolioPosition] = Field(default_factory=list, max_length=20)
@@ -239,7 +258,12 @@ class TrackingState(BaseModel):
     return self
 
 
-class TrackingStateResponse(TrackingState):
+class TrackingStateResponse(BaseModel):
+  watchlist: list[WatchlistItem] = Field(default_factory=list, max_length=20)
+  positions: list[PortfolioPositionResponse] = Field(
+      default_factory=list,
+      max_length=20,
+  )
   updated_at: datetime | None = None
 
 

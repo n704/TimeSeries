@@ -1,7 +1,10 @@
+import numpy as np
+import pytest
 from fastapi.testclient import TestClient
 
 from app.config import Settings
 from app.main import create_app
+from app.services.forecast import ModelForecast
 from tests.fakes import (
     FakeForecastModel,
     FakeMarketDataProvider,
@@ -99,7 +102,9 @@ def test_tracking_state_persists_through_api() -> None:
   assert saved.json()["updated_at"] == "2026-10-18T00:00:00Z"
   assert loaded.status_code == 200
   assert loaded.json()["watchlist"] == payload["watchlist"]
-  assert loaded.json()["positions"] == payload["positions"]
+  assert loaded.json()["positions"] == [
+      {**payload["positions"][0], "price_history": []}
+  ]
 
 
 def test_tracking_state_rejects_invalid_quantiles() -> None:
@@ -167,9 +172,61 @@ def test_forecast_contract_contains_chart_data_and_analysis() -> None:
           "directional_accuracy_percent": 100.0,
           "end_direction_match": True,
       },
+      "correction": {
+          "method": "latest_holdout_ratio",
+          "reference_date": "2026-05-30",
+          "signed_median_error_percent": 0.0,
+          "scale_factor": 1.0,
+      },
   }
   assert payload["metadata"]["backend"] == "fixture"
   assert "financial advice" in payload["disclaimer"]
+
+
+def test_forecast_uses_latest_holdout_error_to_correct_next_day() -> None:
+  class OverpredictingForecastModel(FakeForecastModel):
+    async def predict(
+        self,
+        context: np.ndarray,
+        horizon: int,
+    ) -> ModelForecast:
+      latest = float(context[-1])
+      if horizon == 7:
+        medians = [
+            (latest + index + 1) * 1.12
+            for index in range(horizon)
+        ]
+      else:
+        medians = [latest * 1.10 for _ in range(horizon)]
+      return ModelForecast(
+          p10=[value * 0.9 for value in medians],
+          p50=medians,
+          p90=[value * 1.1 for value in medians],
+      )
+
+  app = create_app(
+      settings=Settings(app_env="test", min_history_observations=120),
+      market_data_provider=FakeMarketDataProvider(),
+      forecast_model=OverpredictingForecastModel(),
+      trading_calendar=FakeTradingCalendar(),
+      tracking_store=FakeTrackingStore(),
+  )
+  with TestClient(app) as client:
+    response = client.post(
+        "/api/v1/forecasts",
+        json={"symbol": "RELIANCE.NS", "horizon": 20},
+    )
+
+  assert response.status_code == 200
+  payload = response.json()
+  correction = payload["analysis"]["historical_evaluation"]["correction"]
+  assert correction["method"] == "latest_holdout_ratio"
+  assert correction["reference_date"] == "2026-05-30"
+  assert correction["signed_median_error_percent"] == pytest.approx(12)
+  assert correction["scale_factor"] == pytest.approx(1 / 1.12)
+  assert payload["forecast"][0]["p50"] == pytest.approx(249 * 1.10 / 1.12)
+  assert payload["forecast"][0]["p50"] < payload["analysis"]["latest_close"]
+  assert "back-check-corrected" in payload["analysis"]["summary"]
 
 
 def test_forecast_rejects_insufficient_history() -> None:
@@ -240,6 +297,10 @@ def test_index_screen_returns_top_five_positive_forecasts() -> None:
   assert payload["metadata"]["analyzed_count"] == 50
   assert payload["metadata"]["positive_count"] == 50
   assert payload["metadata"]["unavailable_symbols"] == []
+  assert all(
+      result["correction"]["method"] == "latest_holdout_ratio"
+      for result in payload["results"]
+  )
   assert "not a buy, sell, or hold recommendation" in payload["disclaimer"]
 
 

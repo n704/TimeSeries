@@ -6,6 +6,8 @@ from app.providers.base import HistoryData
 from app.schemas import (
     HistoryMetadata,
     PricePoint,
+    PortfolioPositionResponse,
+    PortfolioPriceSnapshot,
     Security,
     TrackingState,
     TrackingStateResponse,
@@ -109,7 +111,44 @@ class FakeTrackingStore:
   async def save(self, state: TrackingState) -> TrackingStateResponse:
     self.state = TrackingStateResponse(
         watchlist=state.watchlist,
-        positions=state.positions,
+        positions=[
+            PortfolioPositionResponse(
+                **position.model_dump(),
+                price_history=[],
+            )
+            for position in state.positions
+        ],
         updated_at=datetime(2026, 10, 18, tzinfo=UTC),
     )
     return self.state
+
+  async def record_price_snapshot(
+      self,
+      symbol: str,
+      market_date: date,
+      adjusted_close: float,
+      captured_at: datetime,
+  ) -> None:
+    self.state = self.state.model_copy(
+        update={
+            "positions": [
+                position.model_copy(
+                    update={
+                        "latest_close": adjusted_close,
+                        "last_market_date": market_date,
+                        "price_history": [
+                            *position.price_history,
+                            PortfolioPriceSnapshot(
+                                date=market_date,
+                                adjusted_close=adjusted_close,
+                                captured_at=captured_at,
+                            ),
+                        ],
+                    }
+                )
+                if position.security.symbol == symbol
+                else position
+                for position in self.state.positions
+            ]
+        }
+    )

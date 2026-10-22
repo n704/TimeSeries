@@ -13,6 +13,7 @@ from app.schemas import (
     BacktestPoint,
     BacktestRequest,
     BacktestResponse,
+    ForecastCorrection,
     ForecastMetadata,
     ForecastPoint,
     ForecastRequest,
@@ -29,10 +30,10 @@ from app.schemas import (
 )
 from app.services.analysis import analyze_forecast
 from app.services.backtest import (
-    apply_forecast_bias,
+    apply_forecast_correction,
     build_backtest_points,
+    calculate_forecast_correction,
     evaluate_backtest,
-    forecast_bias,
 )
 from app.services.calendar import TradingCalendar
 from app.services.forecast import ForecastModel
@@ -48,7 +49,8 @@ DISPLAY_PERIODS = {
 }
 DISCLAIMER = (
     "This forecast is an uncertain statistical estimate for informational "
-    "purposes only and is not financial advice."
+    "purposes only and is not financial advice. Back-check correction cannot "
+    "guarantee accuracy or prevent loss."
 )
 BACKTEST_SESSIONS = 7
 BACKTEST_DISCLAIMER = (
@@ -58,7 +60,8 @@ BACKTEST_DISCLAIMER = (
 INDEX_SCREEN_DISCLAIMER = (
     "This ranking compares positive TimesFM median forecast changes for research "
     "only. It does not consider valuation, fundamentals, news, liquidity, risk, "
-    "or personal circumstances and is not a buy, sell, or hold recommendation."
+    "or personal circumstances and is not a buy, sell, or hold recommendation. "
+    "Back-check correction cannot guarantee accuracy or prevent loss."
 )
 INDEX_HISTORY_CONCURRENCY = 5
 
@@ -188,6 +191,7 @@ async def create_forecast(
         history.prices[-BACKTEST_SESSIONS:],
         evaluation_output,
     )
+    correction = calculate_forecast_correction(evaluation_points)
     historical_evaluation = HistoricalEvaluation(
         holdout_sessions=BACKTEST_SESSIONS,
         context_end_date=evaluation_context_prices[-1].date,
@@ -195,8 +199,9 @@ async def create_forecast(
             evaluation_points,
             evaluation_context_prices[-1].adjusted_close,
         ),
+        correction=correction,
     )
-    output = apply_forecast_bias(output, forecast_bias(evaluation_points))
+    output = apply_forecast_correction(output, correction)
   forecast_dates = _calendar(request).next_sessions(
       history.security.exchange,
       history.prices[-1].date,
@@ -292,6 +297,7 @@ async def screen_index(
   ]
   model = _model(request)
   outputs = await model.predict_batch(contexts, body.horizon)
+  corrections: list[ForecastCorrection | None] = [None] * len(outputs)
   correction_indices = [
       index
       for index, history in enumerate(histories)
@@ -318,12 +324,19 @@ async def screen_index(
           histories[index].prices[-BACKTEST_SESSIONS:],
           correction_output,
       )
-      outputs[index] = apply_forecast_bias(
+      correction = calculate_forecast_correction(evaluation_points)
+      outputs[index] = apply_forecast_correction(
           outputs[index],
-          forecast_bias(evaluation_points),
+          correction,
       )
+      corrections[index] = correction
   candidates = []
-  for history, output in zip(histories, outputs, strict=True):
+  for history, output, correction in zip(
+      histories,
+      outputs,
+      corrections,
+      strict=True,
+  ):
     latest_close = history.prices[-1].adjusted_close
     final_p10 = output.p10[-1]
     final_p50 = output.p50[-1]
@@ -344,6 +357,7 @@ async def screen_index(
             final_p10,
             final_p50,
             final_p90,
+            correction,
         )
     )
 
@@ -361,6 +375,7 @@ async def screen_index(
           final_p90=final_p90,
           final_interval_width_percent=((final_p90 - final_p10) / final_p50) * 100,
           is_data_stale=history.metadata.is_stale,
+          correction=correction,
       )
       for rank, (
           change,
@@ -369,6 +384,7 @@ async def screen_index(
           final_p10,
           final_p50,
           final_p90,
+          correction,
       ) in enumerate(candidates[:5], start=1)
   ]
   return IndexScreenResponse(

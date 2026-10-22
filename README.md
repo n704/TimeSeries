@@ -11,7 +11,8 @@ A Mac-first stock trend forecasting application with:
 - forecast evidence that compares the model direction with the latest
   five-session move and an isolated seven-session holdout;
 - a SQLite-backed watchlist and paper portfolio with selectable 7-, 20-, and
-  60-session probabilistic outlooks.
+  60-session probabilistic outlooks and saved daily adjusted closes captured
+  after 6:00 PM Asia/Kolkata.
 
 The application forecasts 5, 20, or 60 future trading sessions. It does not
 support intraday data, options, cryptocurrency, brokerage connections, trade
@@ -35,6 +36,7 @@ spec.md        Product and technical specification
 - [AI agent guide](./AGENTS.md)
 - [Backend guide](./backend/README.md)
 - [Frontend guide](./frontend/README.md)
+- [Forecast calculation](./FORECAST_CALCULATION.md)
 - [Deployment guide](./DEPLOYMENT.md)
 - [Product and technical specification](./spec.md)
 
@@ -158,7 +160,10 @@ uv run --project backend python scripts/start_services.py
 ```
 
 The supervisor validates `uv`, `npm`, and the configured TimesFM checkpoint,
-starts both processes, and stops the other service if either process exits.
+starts the backend and frontend on the dedicated `BACKEND_PORT` and
+`FRONTEND_PORT` values (8000 and 5173 by default), and stops the other service
+if either process exits. It also reports the in-backend portfolio snapshot
+worker, which needs no public port.
 Validate prerequisites without starting anything:
 
 ```bash
@@ -226,6 +231,13 @@ MLX is macOS-only. This stack is for local evaluation, not production.
 | `GET` | `/health/live` | Check the API process |
 | `GET` | `/health/ready` | Check whether TimesFM is loaded |
 
+The backend records the latest available adjusted close for every paper
+position in a normalized SQLite table after 6:00 PM Asia/Kolkata. A process
+that starts after 6:00 PM catches up automatically. Rows are keyed by symbol
+and exchange market date, so weekends, holidays, and restarts do not create
+duplicate or synthetic prices. Tracking responses include up to 30 saved
+sessions per position for daily-change display.
+
 Example forecast request:
 
 ```bash
@@ -248,10 +260,12 @@ directional accuracy, and whether the modeled end direction matched the known
 holdout. It is a single historical holdout, not a guarantee of future accuracy.
 
 Forecast responses automatically include the same isolated holdout evidence
-when at least 127 valid observations are available. The analysis also compares
-the TimesFM median direction with the latest five-session adjusted-close move.
-These checks qualify the evidence shown to the user; they never alter or replace
-the raw TimesFM p10, p50, or p90 values.
+when at least 127 valid observations are available. The latest holdout
+actual-to-median ratio scales every future p10, p50, and p90 value, including
+the next session. The response exposes the signed median error and scale factor.
+The analysis also compares the corrected median direction with the latest
+five-session adjusted-close move. See
+[Forecast calculation](./FORECAST_CALCULATION.md) for the formulas and limits.
 
 Example index research screen:
 

@@ -33,6 +33,7 @@ app/api/routes.py
 | `app/services/forecast.py` | Forecast protocol and local TimesFM adapter |
 | `app/services/analysis.py` | Trend metrics and neutral summary |
 | `app/services/tracking.py` | SQLite watchlist and paper portfolio persistence |
+| `app/services/portfolio_snapshots.py` | Daily 6 PM portfolio price capture |
 | `app/api/routes.py` | `/api/v1` endpoints and orchestration |
 
 ## Setup
@@ -96,6 +97,14 @@ Tracking data is stored in `data/tracking.sqlite3` by default. Override the path
 with `TRACKING_DATABASE_PATH`. The database and its WAL files are local runtime
 data and must not be committed.
 
+The SQLite database contains the single tracking-state document plus a
+normalized `portfolio_price_snapshots` table keyed by symbol and market date.
+From 6:00 PM until midnight Asia/Kolkata, the API process captures each
+uncaptured position's latest available adjusted close and rechecks failures or
+new positions every five minutes. A process that starts after 6:00 PM catches
+up automatically. The market-date key makes repeated starts and non-trading
+days idempotent. Provider errors are logged and no synthetic close is inserted.
+
 ## API
 
 ### Search
@@ -135,7 +144,10 @@ Content-Type: application/json
 ```
 
 The update replaces the complete single-user tracking state atomically after
-schema, size, symbol uniqueness, and forecast-quantile validation.
+schema, size, symbol uniqueness, and forecast-quantile validation. Price
+history is server-managed and cannot be overwritten by a stale browser save.
+`GET` and `PUT` responses include up to the latest 30 saved market sessions in
+each position's `price_history`; removing a position deletes its saved prices.
 
 Supported horizons: `5`, `20`, and `60`.
 
@@ -179,12 +191,11 @@ final p10-p90 uncertainty. It is not an investment recommendation.
 5. When at least 127 observations are available, run a second isolated
    seven-session holdout forecast using context that ends before all seven
    known closes.
-6. Calculate the mean signed holdout error (`actual - p50`) and shift the
-   future p10, p50, and p90 forecasts by that bias. This correction uses only
-   the immediately preceding holdout and is not applied to the back-check
-   itself.
-7. Extract and validate p10, p50, and p90 without modifying the raw TimesFM
-   output used for back-check metrics.
+6. Calculate the latest holdout ratio (`actual / p50`) and multiply every
+   future p10, p50, and p90 value by that scale. This corrects the next session
+   and the remaining path consistently while preserving quantile order.
+7. Keep the isolated holdout values raw when calculating back-check metrics;
+   never correct the evidence with the correction it produced.
 8. Map output steps to future Indian exchange sessions.
 9. Calculate moving averages, changes, trend, uncertainty width, recent
    five-session alignment, and holdout error/directional evidence.
@@ -192,9 +203,12 @@ final p10-p90 uncertainty. It is not an investment recommendation.
 
 For a back-check, the latest seven observations are removed before inference
 and are used only after inference to calculate holdout metrics and the
-leakage-safe bias correction. A forecast with 120-126 observations remains
+leakage-safe level correction. A forecast with 120-126 observations remains
 available without correction, but its evidence level is limited because an
 isolated holdout cannot be formed.
+
+See [Forecast calculation](../FORECAST_CALCULATION.md) for the exact formulas,
+the `+10%` forecast versus `+12%` error example, and limitations.
 
 ## Tests
 
@@ -211,6 +225,7 @@ Tests cover:
 - endpoint success and error contracts;
 - insufficient history;
 - seven-session holdout isolation, error, coverage, and directional metrics;
+- latest-holdout percentage correction of the next forecast and quantiles;
 - recent-trend disagreement and forecast evidence levels;
 - multi-index batch screening and positive 20-session ranking;
 - application startup cleanup;
