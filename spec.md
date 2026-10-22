@@ -317,17 +317,22 @@ The MVP is a single-page application with these regions:
    - Add or remove the selected security from a watchlist.
    - Add, update, or remove a paper position with quantity and average price.
    - Show cost basis, snapshot market value, and unrealized change.
-   - Save the latest available adjusted close for each paper position after
-     6:00 PM Asia/Kolkata, keyed by its actual exchange market date.
+   - Save the latest available adjusted close for each paper position at
+     4:00 PM Asia/Kolkata on exchange trading days, keyed by its actual
+     exchange market date.
+   - Show a responsive adjusted-close snapshot chart for each position, with
+     its average price as a labeled reference line.
    - Show the latest daily price and position-value change plus an expandable
-     table of saved per-session changes.
+     exact-value table of saved per-session changes as the chart alternative.
    - Let users select a 7-, 20-, or 60-session portfolio outlook. Show the
      selected future session's p50 price and p10-p90 range when that forecast
      point has been generated.
    - Automatically generate missing 20-session forecasts for the 7- and
      20-session portfolio views, and missing 60-session forecasts for the
      60-session view. Show progress and per-symbol failures.
-   - Persist tracking state in the backend's local SQLite database.
+   - Persist tracking state through the backend `TrackingStore`. Direct local
+     runs default to SQLite; Docker Compose uses PostgreSQL and supports a
+     verified migration from the SQLite source.
 8. **Footer**
    - Data attribution, model attribution, and financial disclaimer.
 
@@ -875,15 +880,17 @@ symbols. Quantities, prices, and forecast quantiles must be finite and positive;
 every outlook must satisfy `p10 <= p50 <= p90`. Supported outlook keys are
 exactly `7`, `20`, and `60`.
 
-The local API process runs one background portfolio snapshot worker. From 6:00
-PM until midnight Asia/Kolkata it captures uncaptured positions and rechecks
-failures or newly added positions every five minutes. A process started during
-that window catches up immediately. For each current position it fetches
-provider history and upserts the latest adjusted close into
+The local API process runs one background portfolio snapshot worker. At 4:00 PM
+Asia/Kolkata on an NSE or BSE trading day, it captures uncaptured positions
+whose exchange has a valid session that day. Until midnight it rechecks failures,
+provider data that has not yet reached the current market date, and newly added
+positions every five minutes. A process started during that same-day window
+catches up immediately. For each eligible current position it fetches provider
+history and upserts the latest adjusted close into
 `portfolio_price_snapshots` with `(symbol, market_date)` as the primary key.
-This prevents weekends, holidays, or restarts from creating duplicate or
-synthetic prices. A provider failure is logged and leaves that symbol unchanged.
-Removing a position removes its snapshot history.
+This prevents weekends, exchange holidays, or restarts from creating duplicate
+or synthetic prices. A provider failure is logged and leaves that symbol
+unchanged. Removing a position removes its snapshot history.
 
 ### 10.7 Health endpoints
 
@@ -955,11 +962,15 @@ load:
 - Redact provider keys, authorization headers, and full exception payloads from
   logs.
 - The MVP stores no user profile. Watchlist and paper portfolio data are stored
-  in a single-user local SQLite database and are not synchronized to an account
-  or brokerage.
+  in a single-user local tracking database and are not synchronized to an
+  account or brokerage. Direct runs may use SQLite; Docker Compose uses
+  PostgreSQL in its local named volume.
 - Portfolio price snapshots contain only canonical symbols, market dates,
   adjusted closes, and capture timestamps. They remain in the configured local
-  SQLite database.
+  tracking database.
+- SQLite-to-PostgreSQL migration must be transactional, preserve the source,
+  verify copied state and snapshots, and refuse to overwrite a nonempty
+  destination without an explicit force option.
 - Do not log credentials or complete upstream response payloads.
 
 ## 13. Development diagnostics
@@ -1115,9 +1126,11 @@ The MVP is complete only when:
     direction opposes the latest five-session move and applies the disclosed
     latest-holdout ratio to all future model quantiles without altering the raw
     holdout evidence.
-16. While the local API is running, paper positions are captured after 6:00 PM
-    Asia/Kolkata, duplicate market dates are upserted, and the tracker displays
-    latest and historical per-session changes without implying live prices.
+16. While the local API is running, paper positions are captured at 4:00 PM
+    Asia/Kolkata only when their exchange has a valid trading session, duplicate
+    market dates are upserted, and the tracker displays responsive per-position
+    snapshot charts plus latest and historical per-session changes without
+    implying live prices.
 
 ## 18. References
 

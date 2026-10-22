@@ -63,7 +63,9 @@ Set `TIMESFM_CHECKPOINT_PATH` to the absolute local directory. Never commit
 
 For the optional Docker Compose workflow, set
 `TIMESFM_CHECKPOINT_HOST_PATH` to that same absolute directory. Compose mounts
-it read-only and overrides the in-container checkpoint path.
+it read-only and overrides the in-container checkpoint path. Replace
+`POSTGRES_PASSWORD` with a local password. PostgreSQL is bound to loopback and
+persists in a named Docker volume.
 
 ### 5. Validate
 
@@ -108,23 +110,48 @@ Use `--reload` only for active development.
 
 ### 7. Optional Docker Compose development stack
 
+If `backend/data/tracking.sqlite3` contains existing tracker data, stop the API
+and migrate before bringing up the complete stack:
+
+```bash
+docker compose up -d postgres
+docker compose --profile migration run --rm tracking-migration
+```
+
+The migration command is transactional, verifies exact state and snapshot
+parity, preserves the SQLite source, and refuses to overwrite a nonempty
+PostgreSQL destination. Use this explicit replacement command only when
+discarding the current PostgreSQL tracking state is intended:
+
+```bash
+docker compose --profile migration run --rm tracking-migration \
+  --sqlite-path data/tracking.sqlite3 --force
+```
+
+Start the stack:
+
 ```bash
 docker compose up --build
 ```
 
 The stack:
 
+- runs PostgreSQL 17 with a health check and a durable `postgres_data` volume;
 - builds separate development images for FastAPI and Vite;
 - bind-mounts source for reload behavior;
 - bind-mounts `TIMESFM_CHECKPOINT_HOST_PATH` read-only at `/models/timesfm`;
 - uses the PyTorch CPU backend because Linux containers cannot use macOS MLX;
-- exposes the same local ports, 8000 and 5173.
+- exposes the application on ports 8000 and 5173 and PostgreSQL on loopback
+  port 5432 by default.
 
 Stop and remove the development containers with:
 
 ```bash
 docker compose down
 ```
+
+This preserves PostgreSQL data. `docker compose down -v` permanently deletes
+the database volume and should be used only for an intentional reset.
 
 Do not publish these images or use this Compose file as a production design.
 The downloaded TimesFM evaluation weights remain subject to their
@@ -257,26 +284,35 @@ Current settings:
 | `MODEL_LOAD_TIMEOUT_SECONDS` | Model initialization deadline |
 | `FORECAST_TIMEOUT_SECONDS` | Forecast deadline |
 | `REQUEST_TIMEOUT_SECONDS` | Market provider HTTP deadline |
-| `TRACKING_DATABASE_PATH` | Writable SQLite path for watchlist and paper portfolio state |
+| `TRACKING_DATABASE_PATH` | Writable SQLite fallback path for direct local runs |
+| `TRACKING_DATABASE_URL` | Secret PostgreSQL URL; when set, takes precedence over SQLite |
+| `POSTGRES_DB` | Docker development database name |
+| `POSTGRES_USER` | Docker development database role |
+| `POSTGRES_PASSWORD` | Docker development password; keep only in local `.env` |
+| `POSTGRES_PORT` | Loopback host port for the Docker PostgreSQL service |
 
 A managed production adapter will require new settings. Add them to typed
 configuration and secret management, and update `.env.example` with safe
 placeholders only. Add an explicit `production` value to `APP_ENV` as part of
 that work; the current typed configuration intentionally rejects it.
 
-The default local path is `data/tracking.sqlite3` relative to the backend
-working directory. Docker Compose bind-mounts `backend/` at `/app`, so the
-default database remains on the host under `backend/data/`. Production
-deployment requires a durable writable volume, backups, and a migration plan;
-do not place the database inside an immutable image layer.
+The default direct-run path is `data/tracking.sqlite3` relative to the backend
+working directory. Docker Compose sets `TRACKING_DATABASE_URL` and persists
+PostgreSQL under the `postgres_data` volume. The checked-in migration command
+copies the existing SQLite state and snapshots without deleting its source.
+Production deployment requires managed credentials, backups, restore tests,
+TLS where traffic crosses a trusted boundary, and a migration plan; do not
+place database files inside an immutable image layer.
 
 The local API process also owns an in-process portfolio snapshot worker. From
-6:00 PM until midnight Asia/Kolkata it captures uncaptured positions, retries
-failures and newly added positions every five minutes, and upserts by symbol
-and exchange market date. This is appropriate for the documented single-worker
-local runtime. A multi-worker or horizontally scaled production deployment must
-move this schedule to one leader or a managed scheduler; otherwise workers may
-make redundant provider calls even though the SQLite upsert prevents duplicate
+4:00 PM until midnight Asia/Kolkata on an NSE or BSE trading day, it captures
+positions whose exchange has a valid session, retries failures, delayed
+current-session data, and newly added positions every five minutes, and upserts
+by symbol and exchange market date. Closed exchange dates do not call the
+provider. This is appropriate for the documented single-worker local runtime.
+A multi-worker or horizontally scaled production deployment must move this
+schedule to one leader or a managed scheduler; otherwise workers may make
+redundant provider calls even though the database upsert prevents duplicate
 rows.
 
 ## Release procedure

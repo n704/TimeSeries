@@ -168,8 +168,8 @@ def start_services(
 
   try:
     print(
-        "Portfolio tracker: backend worker after 18:00 Asia/Kolkata "
-        "(no public port).",
+        "Portfolio tracker: backend worker at 16:00 Asia/Kolkata on "
+        "exchange trading days (no public port).",
         flush=True,
     )
     for name, command, cwd, service_environment in commands:

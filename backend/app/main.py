@@ -19,10 +19,19 @@ from app.providers.yahoo import YahooMarketDataProvider
 from app.schemas import ErrorBody, ErrorResponse
 from app.services.calendar import TradingCalendar
 from app.services.forecast import ForecastModel, LocalTimesFMAdapter
+from app.services.postgres_tracking import PostgresTrackingStore
 from app.services.portfolio_snapshots import PortfolioSnapshotService
 from app.services.tracking import SQLiteTrackingStore, TrackingStore
 
 logger = logging.getLogger(__name__)
+
+
+def create_tracking_store(settings: Settings) -> TrackingStore:
+  if settings.tracking_database_url is not None:
+    return PostgresTrackingStore(
+        settings.tracking_database_url.get_secret_value()
+    )
+  return SQLiteTrackingStore(settings.tracking_database_path)
 
 
 def _log_snapshot_task_failure(task: asyncio.Task[None]) -> None:
@@ -83,9 +92,10 @@ def create_app(
     )
     application.state.market_data_provider = provider
     application.state.forecast_model = model
-    application.state.trading_calendar = trading_calendar or TradingCalendar()
-    application.state.tracking_store = tracking_store or SQLiteTrackingStore(
-        configured_settings.tracking_database_path
+    calendar = trading_calendar or TradingCalendar()
+    application.state.trading_calendar = calendar
+    application.state.tracking_store = (
+        tracking_store or create_tracking_store(configured_settings)
     )
     application.state.model_ready = False
     snapshot_task: asyncio.Task[None] | None = None
@@ -94,6 +104,7 @@ def create_app(
       snapshot_service = PortfolioSnapshotService(
           provider=provider,
           tracking_store=application.state.tracking_store,
+          trading_calendar=calendar,
       )
       application.state.portfolio_snapshot_service = snapshot_service
       snapshot_task = asyncio.create_task(

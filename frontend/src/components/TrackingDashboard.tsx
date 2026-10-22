@@ -4,6 +4,7 @@ import type {
   WatchlistItem,
   Security,
 } from "../types";
+import { PortfolioSnapshotChart } from "./PortfolioSnapshotChart";
 
 interface TrackingDashboardProps {
   watchlist: WatchlistItem[];
@@ -130,6 +131,9 @@ export function TrackingDashboard({
   );
   const hasCompleteOutlook =
     positions.length > 0 && forecastedPositions.length === positions.length;
+  const positionsWithSnapshots = positions.filter(
+    (position) => (position.priceHistory?.length ?? 0) > 0,
+  );
 
   return (
     <section
@@ -144,8 +148,8 @@ export function TrackingDashboard({
           <h1>Your market, <span>in one view.</span></h1>
           <p>
             Save stocks for later and track paper positions using adjusted
-            closes, daily 6 PM price snapshots, and probabilistic TimesFM
-            outlooks.
+            closes, 4 PM trading-day price snapshots, and probabilistic
+            TimesFM outlooks.
           </p>
         </div>
         <div className="privacy-card">
@@ -274,6 +278,38 @@ export function TrackingDashboard({
                 )}
               </article>
             </div>
+            <section
+              className="portfolio-snapshots"
+              aria-labelledby="portfolio-snapshots-heading"
+            >
+              <div className="portfolio-snapshots-heading">
+                <div>
+                  <p className="step-label">SAVED MARKET HISTORY</p>
+                  <h3 id="portfolio-snapshots-heading">
+                    Portfolio snapshot charts
+                  </h3>
+                </div>
+                <p>
+                  Adjusted closes captured at 4:00 PM on exchange trading days;
+                  dashed lines mark each position's average price.
+                </p>
+              </div>
+              {positionsWithSnapshots.length ? (
+                <div className="portfolio-snapshot-grid">
+                  {positionsWithSnapshots.map((position) => (
+                    <PortfolioSnapshotChart
+                      key={position.security.symbol}
+                      position={position}
+                    />
+                  ))}
+                </div>
+              ) : (
+                <p className="snapshot-chart-empty">
+                  Snapshot charts appear after the first scheduled market-day
+                  capture.
+                </p>
+              )}
+            </section>
             <div className="portfolio-table table-scroll">
               <table>
                 <caption className="sr-only">Locally saved paper portfolio positions</caption>
@@ -532,12 +568,12 @@ export function TrackingDashboard({
       </section>
 
       <p className="tracking-disclaimer">
-        Daily prices are saved locally after 6:00 PM Asia/Kolkata using the
-        provider's latest available exchange-session adjusted close; weekends
-        and holidays do not create synthetic market prices. Values and
-        selected-horizon p10-p90 forecasts are not live quotes, guarantees, or
-        brokerage records. This feature does not place orders or provide
-        investment advice.
+        Daily prices are saved locally at 4:00 PM Asia/Kolkata only on exchange
+        trading days, using the provider's latest available adjusted close.
+        Weekends and exchange holidays do not trigger captures or create
+        synthetic market prices. Values and selected-horizon p10-p90 forecasts
+        are not live quotes, guarantees, or brokerage records. This feature
+        does not place orders or provide investment advice.
       </p>
     </section>
   );
