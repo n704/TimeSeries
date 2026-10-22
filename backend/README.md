@@ -179,16 +179,22 @@ final p10-p90 uncertainty. It is not an investment recommendation.
 5. When at least 127 observations are available, run a second isolated
    seven-session holdout forecast using context that ends before all seven
    known closes.
-6. Extract and validate p10, p50, and p90 without modifying TimesFM output.
-7. Map output steps to future Indian exchange sessions.
-8. Calculate moving averages, changes, trend, uncertainty width, recent
+6. Calculate the mean signed holdout error (`actual - p50`) and shift the
+   future p10, p50, and p90 forecasts by that bias. This correction uses only
+   the immediately preceding holdout and is not applied to the back-check
+   itself.
+7. Extract and validate p10, p50, and p90 without modifying the raw TimesFM
+   output used for back-check metrics.
+8. Map output steps to future Indian exchange sessions.
+9. Calculate moving averages, changes, trend, uncertainty width, recent
    five-session alignment, and holdout error/directional evidence.
-9. Return the most recent 120 historical points for the default forecast chart.
+10. Return the most recent 120 historical points for the default forecast chart.
 
 For a back-check, the latest seven observations are removed before inference
-and are used only after inference to calculate holdout metrics. A forecast with
-120-126 observations remains available, but its evidence level is limited
-because an isolated holdout cannot be formed.
+and are used only after inference to calculate holdout metrics and the
+leakage-safe bias correction. A forecast with 120-126 observations remains
+available without correction, but its evidence level is limited because an
+isolated holdout cannot be formed.
 
 ## Tests
 

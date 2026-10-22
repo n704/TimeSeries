@@ -28,7 +28,12 @@ from app.schemas import (
     TrackingStateResponse,
 )
 from app.services.analysis import analyze_forecast
-from app.services.backtest import build_backtest_points, evaluate_backtest
+from app.services.backtest import (
+    apply_forecast_bias,
+    build_backtest_points,
+    evaluate_backtest,
+    forecast_bias,
+)
 from app.services.calendar import TradingCalendar
 from app.services.forecast import ForecastModel
 from app.services.indices import INDEX_UNIVERSES
@@ -191,6 +196,7 @@ async def create_forecast(
             evaluation_context_prices[-1].adjusted_close,
         ),
     )
+    output = apply_forecast_bias(output, forecast_bias(evaluation_points))
   forecast_dates = _calendar(request).next_sessions(
       history.security.exchange,
       history.prices[-1].date,
@@ -284,7 +290,38 @@ async def screen_index(
       )
       for history in histories
   ]
-  outputs = await _model(request).predict_batch(contexts, body.horizon)
+  model = _model(request)
+  outputs = await model.predict_batch(contexts, body.horizon)
+  correction_indices = [
+      index
+      for index, history in enumerate(histories)
+      if len(history.prices) >= minimum + BACKTEST_SESSIONS
+  ]
+  if correction_indices:
+    correction_contexts = [
+        np.asarray(
+            [point.adjusted_close for point in histories[index].prices[:-BACKTEST_SESSIONS]],
+            dtype=np.float32,
+        )
+        for index in correction_indices
+    ]
+    correction_outputs = await model.predict_batch(
+        correction_contexts,
+        BACKTEST_SESSIONS,
+    )
+    for index, correction_output in zip(
+        correction_indices,
+        correction_outputs,
+        strict=True,
+    ):
+      evaluation_points = build_backtest_points(
+          histories[index].prices[-BACKTEST_SESSIONS:],
+          correction_output,
+      )
+      outputs[index] = apply_forecast_bias(
+          outputs[index],
+          forecast_bias(evaluation_points),
+      )
   candidates = []
   for history, output in zip(histories, outputs, strict=True):
     latest_close = history.prices[-1].adjusted_close
@@ -334,7 +371,6 @@ async def screen_index(
           final_p90,
       ) in enumerate(candidates[:5], start=1)
   ]
-  model = _model(request)
   return IndexScreenResponse(
       results=results,
       metadata=IndexScreenMetadata(
