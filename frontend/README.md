@@ -74,13 +74,19 @@ market-data credentials, model credentials, or checkpoint paths.
 9. Add the selected stock to the local watchlist or save a paper position with
    quantity and average price.
 10. Open **Watchlist & portfolio** to review saved price snapshots, paper cost
-    basis, market value, unrealized change, and a selectable 7-, 20-, or
-    60-session median and p10-p90 forecast range.
+    basis, market value, unrealized change, latest daily move, saved per-session
+    changes, and a selectable 7-, 20-, or 60-session median and p10-p90 forecast
+    range.
 
 Watchlist and paper portfolio data is stored by the backend in its local SQLite
 database. Existing browser-local tracking data is migrated once when the
 database is empty. Tracking is not synchronized to a user account, another
 device, or a brokerage.
+For each paper position, the backend saves its latest available adjusted close
+after 6:00 PM Asia/Kolkata under the provider's exchange market date. The
+frontend polls tracking state once per minute so a page left open across the
+capture time receives the new daily move. Weekends and holidays reuse the last
+market date and therefore do not create synthetic daily rows.
 Opening the tracker or changing its forecast horizon automatically requests
 missing TimesFM forecasts sequentially. The 7- and 20-session views use a
 20-session run; the 60-session view uses a 60-session run.

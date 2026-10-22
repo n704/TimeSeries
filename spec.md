@@ -317,6 +317,10 @@ The MVP is a single-page application with these regions:
    - Add or remove the selected security from a watchlist.
    - Add, update, or remove a paper position with quantity and average price.
    - Show cost basis, snapshot market value, and unrealized change.
+   - Save the latest available adjusted close for each paper position after
+     6:00 PM Asia/Kolkata, keyed by its actual exchange market date.
+   - Show the latest daily price and position-value change plus an expandable
+     table of saved per-session changes.
    - Let users select a 7-, 20-, or 60-session portfolio outlook. Show the
      selected future session's p50 price and p10-p90 range when that forecast
      point has been generated.
@@ -860,14 +864,26 @@ hold recommendation.
 ### 10.6 Saved tracking state
 
 - `GET /api/v1/tracking` returns the saved watchlist, paper positions, forecast
-  outlook maps, and database update timestamp.
+  outlook maps, up to 30 server-managed price snapshots per position, and the
+  database update timestamp.
 - `PUT /api/v1/tracking` validates and atomically replaces the complete
-  single-user tracking state.
+  single-user tracking state. Client payloads cannot replace server-managed
+  price history.
 
 The API permits at most 20 unique watchlist symbols and 20 unique position
 symbols. Quantities, prices, and forecast quantiles must be finite and positive;
 every outlook must satisfy `p10 <= p50 <= p90`. Supported outlook keys are
 exactly `7`, `20`, and `60`.
+
+The local API process runs one background portfolio snapshot worker. From 6:00
+PM until midnight Asia/Kolkata it captures uncaptured positions and rechecks
+failures or newly added positions every five minutes. A process started during
+that window catches up immediately. For each current position it fetches
+provider history and upserts the latest adjusted close into
+`portfolio_price_snapshots` with `(symbol, market_date)` as the primary key.
+This prevents weekends, holidays, or restarts from creating duplicate or
+synthetic prices. A provider failure is logged and leaves that symbol unchanged.
+Removing a position removes its snapshot history.
 
 ### 10.7 Health endpoints
 
@@ -941,6 +957,9 @@ load:
 - The MVP stores no user profile. Watchlist and paper portfolio data are stored
   in a single-user local SQLite database and are not synchronized to an account
   or brokerage.
+- Portfolio price snapshots contain only canonical symbols, market dates,
+  adjusted closes, and capture timestamps. They remain in the configured local
+  SQLite database.
 - Do not log credentials or complete upstream response payloads.
 
 ## 13. Development diagnostics
@@ -1096,6 +1115,9 @@ The MVP is complete only when:
     direction opposes the latest five-session move and applies the disclosed
     latest-holdout ratio to all future model quantiles without altering the raw
     holdout evidence.
+16. While the local API is running, paper positions are captured after 6:00 PM
+    Asia/Kolkata, duplicate market dates are upserted, and the tracker displays
+    latest and historical per-session changes without implying live prices.
 
 ## 18. References
 

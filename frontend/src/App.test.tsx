@@ -698,6 +698,66 @@ describe("App", () => {
     );
   });
 
+  it("displays saved end-of-day portfolio changes", async () => {
+    apiMocks.getTrackingState.mockResolvedValue({
+      watchlist: [],
+      positions: [
+        {
+          security,
+          quantity: 2,
+          averagePrice: 1000,
+          latestClose: 110,
+          lastMarketDate: "2026-10-22",
+          outlooks: {
+            7: {
+              date: "2026-11-07",
+              p10: 100,
+              p50: 115,
+              p90: 125,
+              generatedAt: "2026-10-22T12:30:00Z",
+            },
+          },
+          priceHistory: [
+            {
+              date: "2026-10-21",
+              adjustedClose: 100,
+              capturedAt: "2026-10-21T12:30:00Z",
+            },
+            {
+              date: "2026-10-22",
+              adjustedClose: 110,
+              capturedAt: "2026-10-22T12:30:00Z",
+            },
+          ],
+          updatedAt: "2026-10-22T12:30:00Z",
+        },
+      ],
+      updatedAt: "2026-10-22T12:30:00Z",
+    });
+
+    render(<App />);
+    fireEvent.click(
+      screen.getByRole("tab", { name: /watchlist & portfolio/i }),
+    );
+
+    expect(
+      await screen.findByText(/latest daily move/i),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/\+10\.00% · 1 of 1 through 2026-10-22/i)).toBeInTheDocument();
+    const portfolioTable = screen.getByRole("table", {
+      name: /locally saved paper portfolio positions/i,
+    });
+    expect(within(portfolioTable).getByText(/\+10\.00% price/i)).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByText(/view saved daily price changes/i),
+    );
+    const historyTable = screen.getByRole("table", {
+      name: /saved end-of-day portfolio price changes/i,
+    });
+    expect(within(historyTable).getByText("2026-10-22")).toBeInTheDocument();
+    expect(within(historyTable).getByText(/\+10\.00% from 2026-10-21/i)).toBeInTheDocument();
+  });
+
   it("automatically forecasts portfolio positions missing the selected horizon", async () => {
     const trackedSecurity = {
       ...security,

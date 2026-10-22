@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -18,9 +19,21 @@ from app.providers.yahoo import YahooMarketDataProvider
 from app.schemas import ErrorBody, ErrorResponse
 from app.services.calendar import TradingCalendar
 from app.services.forecast import ForecastModel, LocalTimesFMAdapter
+from app.services.portfolio_snapshots import PortfolioSnapshotService
 from app.services.tracking import SQLiteTrackingStore, TrackingStore
 
 logger = logging.getLogger(__name__)
+
+
+def _log_snapshot_task_failure(task: asyncio.Task[None]) -> None:
+  if task.cancelled():
+    return
+  error = task.exception()
+  if error is not None:
+    logger.error(
+        "Portfolio snapshot task stopped unexpectedly.",
+        exc_info=(type(error), error, error.__traceback__),
+    )
 
 
 def _error_response(
@@ -75,8 +88,19 @@ def create_app(
         configured_settings.tracking_database_path
     )
     application.state.model_ready = False
+    snapshot_task: asyncio.Task[None] | None = None
     try:
       await application.state.tracking_store.initialize()
+      snapshot_service = PortfolioSnapshotService(
+          provider=provider,
+          tracking_store=application.state.tracking_store,
+      )
+      application.state.portfolio_snapshot_service = snapshot_service
+      snapshot_task = asyncio.create_task(
+          snapshot_service.run(),
+          name="portfolio-price-snapshots",
+      )
+      snapshot_task.add_done_callback(_log_snapshot_task_failure)
       try:
         await model.load()
       except RuntimeError:
@@ -89,6 +113,12 @@ def create_app(
       yield
     finally:
       application.state.model_ready = False
+      if snapshot_task is not None and not snapshot_task.done():
+        snapshot_task.cancel()
+        try:
+          await snapshot_task
+        except asyncio.CancelledError:
+          pass
       await provider.close()
 
   application = FastAPI(

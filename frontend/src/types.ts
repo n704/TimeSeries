@@ -181,6 +181,12 @@ export interface WatchlistItem {
   addedAt: string;
 }
 
+export interface PortfolioPriceSnapshot {
+  date: string;
+  adjustedClose: number;
+  capturedAt: string;
+}
+
 export interface PortfolioPosition {
   security: Security;
   quantity: number;
@@ -188,6 +194,7 @@ export interface PortfolioPosition {
   latestClose: number;
   lastMarketDate: string;
   outlooks?: PortfolioOutlooks;
+  priceHistory?: PortfolioPriceSnapshot[];
   updatedAt: string;
 }
 

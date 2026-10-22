@@ -11,7 +11,8 @@ A Mac-first stock trend forecasting application with:
 - forecast evidence that compares the model direction with the latest
   five-session move and an isolated seven-session holdout;
 - a SQLite-backed watchlist and paper portfolio with selectable 7-, 20-, and
-  60-session probabilistic outlooks.
+  60-session probabilistic outlooks and saved daily adjusted closes captured
+  after 6:00 PM Asia/Kolkata.
 
 The application forecasts 5, 20, or 60 future trading sessions. It does not
 support intraday data, options, cryptocurrency, brokerage connections, trade
@@ -159,7 +160,10 @@ uv run --project backend python scripts/start_services.py
 ```
 
 The supervisor validates `uv`, `npm`, and the configured TimesFM checkpoint,
-starts both processes, and stops the other service if either process exits.
+starts the backend and frontend on the dedicated `BACKEND_PORT` and
+`FRONTEND_PORT` values (8000 and 5173 by default), and stops the other service
+if either process exits. It also reports the in-backend portfolio snapshot
+worker, which needs no public port.
 Validate prerequisites without starting anything:
 
 ```bash
@@ -226,6 +230,13 @@ MLX is macOS-only. This stack is for local evaluation, not production.
 | `PUT` | `/api/v1/tracking` | Atomically replace saved tracking state |
 | `GET` | `/health/live` | Check the API process |
 | `GET` | `/health/ready` | Check whether TimesFM is loaded |
+
+The backend records the latest available adjusted close for every paper
+position in a normalized SQLite table after 6:00 PM Asia/Kolkata. A process
+that starts after 6:00 PM catches up automatically. Rows are keyed by symbol
+and exchange market date, so weekends, holidays, and restarts do not create
+duplicate or synthetic prices. Tracking responses include up to 30 saved
+sessions per position for daily-change display.
 
 Example forecast request:
 

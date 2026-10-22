@@ -1271,7 +1271,7 @@ th { color: var(--muted); }
 
 .portfolio-summary {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   gap: 12px;
   margin-bottom: 20px;
 }
@@ -1317,7 +1317,7 @@ th { color: var(--muted); }
   overflow-x: auto;
 }
 
-.portfolio-table table { min-width: 1180px; }
+.portfolio-table table { min-width: 1320px; }
 .portfolio-table td:first-child { min-width: 200px; }
 .portfolio-table td small,
 .watchlist-price small {
@@ -1346,6 +1346,20 @@ th { color: var(--muted); }
   color: var(--muted);
   white-space: normal;
   line-height: 1.4;
+}
+
+.portfolio-history {
+  margin-top: 20px;
+}
+
+.portfolio-history table {
+  min-width: 760px;
+}
+
+.portfolio-history td small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
 }
 
 .table-security {

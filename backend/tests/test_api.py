@@ -102,7 +102,9 @@ def test_tracking_state_persists_through_api() -> None:
   assert saved.json()["updated_at"] == "2026-10-18T00:00:00Z"
   assert loaded.status_code == 200
   assert loaded.json()["watchlist"] == payload["watchlist"]
-  assert loaded.json()["positions"] == payload["positions"]
+  assert loaded.json()["positions"] == [
+      {**payload["positions"][0], "price_history": []}
+  ]
 
 
 def test_tracking_state_rejects_invalid_quantiles() -> None:

@@ -233,6 +233,16 @@ class PortfolioPosition(BaseModel):
   updated_at: datetime
 
 
+class PortfolioPriceSnapshot(BaseModel):
+  date: date
+  adjusted_close: float = Field(gt=0)
+  captured_at: datetime
+
+
+class PortfolioPositionResponse(PortfolioPosition):
+  price_history: list[PortfolioPriceSnapshot] = Field(default_factory=list)
+
+
 class TrackingState(BaseModel):
   watchlist: list[WatchlistItem] = Field(default_factory=list, max_length=20)
   positions: list[PortfolioPosition] = Field(default_factory=list, max_length=20)
@@ -248,7 +258,12 @@ class TrackingState(BaseModel):
     return self
 
 
-class TrackingStateResponse(TrackingState):
+class TrackingStateResponse(BaseModel):
+  watchlist: list[WatchlistItem] = Field(default_factory=list, max_length=20)
+  positions: list[PortfolioPositionResponse] = Field(
+      default_factory=list,
+      max_length=20,
+  )
   updated_at: datetime | None = None
 
 

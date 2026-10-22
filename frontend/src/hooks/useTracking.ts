@@ -5,6 +5,7 @@ import type {
   PortfolioOutlook,
   PortfolioOutlooks,
   PortfolioPosition,
+  PortfolioPriceSnapshot,
   Security,
   TrackingState,
   WatchlistItem,
@@ -12,6 +13,7 @@ import type {
 
 const STORAGE_KEY = "timeseries.tracking.v1";
 const MAX_TRACKED_SECURITIES = 20;
+const SNAPSHOT_REFRESH_INTERVAL_MS = 60_000;
 
 interface TrackingStore extends TrackingState {
   error: string | null;
@@ -59,8 +61,23 @@ function isPortfolioPosition(value: unknown): value is PortfolioPosition {
     typeof candidate.lastMarketDate === "string" &&
     (candidate.outlooks === undefined ||
       isPortfolioOutlooks(candidate.outlooks)) &&
+    (candidate.priceHistory === undefined ||
+      (Array.isArray(candidate.priceHistory) &&
+        candidate.priceHistory.every(isPortfolioPriceSnapshot))) &&
     (candidate.outlook === undefined || isPortfolioOutlook(candidate.outlook)) &&
     typeof candidate.updatedAt === "string"
+  );
+}
+
+function isPortfolioPriceSnapshot(
+  value: unknown,
+): value is PortfolioPriceSnapshot {
+  if (typeof value !== "object" || value === null) return false;
+  const candidate = value as Partial<PortfolioPriceSnapshot>;
+  return (
+    typeof candidate.date === "string" &&
+    isPositiveNumber(candidate.adjustedClose) &&
+    typeof candidate.capturedAt === "string"
   );
 }
 
@@ -140,6 +157,82 @@ function loadTrackingStore(): TrackingStore {
 
 function trackingRequestError(prefix: string, error: unknown): string {
   return error instanceof Error ? `${prefix}: ${error.message}` : prefix;
+}
+
+function samePriceHistory(
+  left: PortfolioPriceSnapshot[] | undefined,
+  right: PortfolioPriceSnapshot[] | undefined,
+): boolean {
+  const leftHistory = left ?? [];
+  const rightHistory = right ?? [];
+  return (
+    leftHistory.length === rightHistory.length &&
+    leftHistory.every((snapshot, index) => {
+      const other = rightHistory[index];
+      return (
+        snapshot.date === other.date &&
+        snapshot.adjustedClose === other.adjustedClose &&
+        snapshot.capturedAt === other.capturedAt
+      );
+    })
+  );
+}
+
+function mergeServerSnapshots(
+  current: TrackingStore,
+  remote: TrackingState,
+): TrackingStore {
+  const remoteWatchlist = new Map(
+    remote.watchlist.map((item) => [item.security.symbol, item]),
+  );
+  const remotePositions = new Map(
+    remote.positions.map((position) => [position.security.symbol, position]),
+  );
+  let changed = false;
+  const watchlist = current.watchlist.map((item) => {
+    const remoteItem = remoteWatchlist.get(item.security.symbol);
+    if (
+      !remoteItem ||
+      (remoteItem.latestClose === item.latestClose &&
+        remoteItem.lastMarketDate === item.lastMarketDate)
+    ) {
+      return item;
+    }
+    changed = true;
+    return {
+      ...item,
+      latestClose: remoteItem.latestClose,
+      lastMarketDate: remoteItem.lastMarketDate,
+    };
+  });
+  const positions = current.positions.map((position) => {
+    const remotePosition = remotePositions.get(position.security.symbol);
+    if (
+      !remotePosition ||
+      (remotePosition.latestClose === position.latestClose &&
+        remotePosition.lastMarketDate === position.lastMarketDate &&
+        samePriceHistory(remotePosition.priceHistory, position.priceHistory))
+    ) {
+      return position;
+    }
+    changed = true;
+    return {
+      ...position,
+      latestClose: remotePosition.latestClose,
+      lastMarketDate: remotePosition.lastMarketDate,
+      priceHistory: remotePosition.priceHistory,
+    };
+  });
+  const refreshError = current.error?.startsWith(
+    "Daily portfolio prices could not be refreshed",
+  );
+  if (!changed && !refreshError) return current;
+  return {
+    ...current,
+    watchlist,
+    positions,
+    error: refreshError ? null : current.error,
+  };
 }
 
 export function useTracking() {
@@ -233,6 +326,37 @@ export function useTracking() {
     return () => window.clearTimeout(timer);
   }, [store.positions, store.ready, store.watchlist]);
 
+  useEffect(() => {
+    const controller = new AbortController();
+    let refreshing = false;
+    const timer = window.setInterval(async () => {
+      if (!hydratedRef.current || refreshing) return;
+      refreshing = true;
+      try {
+        const remote = await getTrackingState(controller.signal);
+        if (!controller.signal.aborted) {
+          setStore((current) => mergeServerSnapshots(current, remote));
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) {
+          setStore((current) => ({
+            ...current,
+            error: trackingRequestError(
+              "Daily portfolio prices could not be refreshed",
+              error,
+            ),
+          }));
+        }
+      } finally {
+        refreshing = false;
+      }
+    }, SNAPSHOT_REFRESH_INTERVAL_MS);
+    return () => {
+      controller.abort();
+      window.clearInterval(timer);
+    };
+  }, []);
+
   function toggleWatchlist(
     security: Security,
     latestClose: number,
@@ -285,6 +409,9 @@ export function useTracking() {
       const exists = current.positions.some(
         (position) => position.security.symbol === security.symbol,
       );
+      const existingPosition = current.positions.find(
+        (position) => position.security.symbol === security.symbol,
+      );
       if (!exists && current.positions.length >= MAX_TRACKED_SECURITIES) {
         return {
           ...current,
@@ -298,6 +425,7 @@ export function useTracking() {
         latestClose,
         lastMarketDate,
         outlooks,
+        priceHistory: existingPosition?.priceHistory,
         updatedAt: new Date().toISOString(),
       };
       return {

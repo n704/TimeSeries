@@ -33,6 +33,7 @@ app/api/routes.py
 | `app/services/forecast.py` | Forecast protocol and local TimesFM adapter |
 | `app/services/analysis.py` | Trend metrics and neutral summary |
 | `app/services/tracking.py` | SQLite watchlist and paper portfolio persistence |
+| `app/services/portfolio_snapshots.py` | Daily 6 PM portfolio price capture |
 | `app/api/routes.py` | `/api/v1` endpoints and orchestration |
 
 ## Setup
@@ -96,6 +97,14 @@ Tracking data is stored in `data/tracking.sqlite3` by default. Override the path
 with `TRACKING_DATABASE_PATH`. The database and its WAL files are local runtime
 data and must not be committed.
 
+The SQLite database contains the single tracking-state document plus a
+normalized `portfolio_price_snapshots` table keyed by symbol and market date.
+From 6:00 PM until midnight Asia/Kolkata, the API process captures each
+uncaptured position's latest available adjusted close and rechecks failures or
+new positions every five minutes. A process that starts after 6:00 PM catches
+up automatically. The market-date key makes repeated starts and non-trading
+days idempotent. Provider errors are logged and no synthetic close is inserted.
+
 ## API
 
 ### Search
@@ -135,7 +144,10 @@ Content-Type: application/json
 ```
 
 The update replaces the complete single-user tracking state atomically after
-schema, size, symbol uniqueness, and forecast-quantile validation.
+schema, size, symbol uniqueness, and forecast-quantile validation. Price
+history is server-managed and cannot be overwritten by a stale browser save.
+`GET` and `PUT` responses include up to the latest 30 saved market sessions in
+each position's `price_history`; removing a position deletes its saved prices.
 
 Supported horizons: `5`, `20`, and `60`.
 

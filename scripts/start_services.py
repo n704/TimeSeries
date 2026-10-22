@@ -12,6 +12,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 BACKEND = ROOT / "backend"
 FRONTEND = ROOT / "frontend"
+DEFAULT_BACKEND_PORT = 8000
+DEFAULT_FRONTEND_PORT = 5173
 
 
 def read_env(path: Path) -> dict[str, str]:
@@ -27,13 +29,28 @@ def read_env(path: Path) -> dict[str, str]:
   return values
 
 
-def validate() -> list[str]:
+def port_number(value: str) -> int:
+  try:
+    port = int(value)
+  except ValueError as error:
+    raise argparse.ArgumentTypeError("port must be an integer") from error
+  if not 1 <= port <= 65535:
+    raise argparse.ArgumentTypeError("port must be between 1 and 65535")
+  return port
+
+
+def validate(
+    local_env: dict[str, str],
+    backend_port: int,
+    frontend_port: int,
+) -> list[str]:
   errors: list[str] = []
   for command in ("uv", "npm"):
     if shutil.which(command) is None:
       errors.append(f"Required command is unavailable: {command}")
 
-  local_env = read_env(ROOT / ".env")
+  if backend_port == frontend_port:
+    errors.append("BACKEND_PORT and FRONTEND_PORT must be different.")
   checkpoint_value = (
       os.environ.get("TIMESFM_CHECKPOINT_PATH")
       or local_env.get("TIMESFM_CHECKPOINT_PATH")
@@ -73,7 +90,35 @@ def stop_process(process: subprocess.Popen[bytes]) -> None:
     process.wait()
 
 
-def start_services() -> int:
+def merged_environment(local_env: dict[str, str]) -> dict[str, str]:
+  environment = os.environ.copy()
+  for key, value in local_env.items():
+    environment.setdefault(key, value)
+  return environment
+
+
+def start_services(
+    local_env: dict[str, str],
+    backend_port: int,
+    frontend_port: int,
+) -> int:
+  environment = merged_environment(local_env)
+  backend_environment = environment.copy()
+  frontend_origins = {
+      f"http://localhost:{frontend_port}",
+      f"http://127.0.0.1:{frontend_port}",
+  }
+  configured_origins = backend_environment.get("ALLOWED_ORIGINS", "")
+  frontend_origins.update(
+      origin.strip()
+      for origin in configured_origins.split(",")
+      if origin.strip()
+  )
+  backend_environment["ALLOWED_ORIGINS"] = ",".join(sorted(frontend_origins))
+  frontend_environment = environment.copy()
+  frontend_environment["VITE_PROXY_TARGET"] = (
+      f"http://127.0.0.1:{backend_port}"
+  )
   commands = [
       (
           "backend",
@@ -86,9 +131,10 @@ def start_services() -> int:
               "--host",
               "127.0.0.1",
               "--port",
-              "8000",
+              str(backend_port),
           ],
           BACKEND,
+          backend_environment,
       ),
       (
           "frontend",
@@ -100,9 +146,11 @@ def start_services() -> int:
               "--host",
               "127.0.0.1",
               "--port",
-              "5173",
+              str(frontend_port),
+              "--strictPort",
           ],
           FRONTEND,
+          frontend_environment,
       ),
   ]
   processes: list[tuple[str, subprocess.Popen[bytes]]] = []
@@ -119,9 +167,19 @@ def start_services() -> int:
   signal.signal(signal.SIGTERM, request_stop)
 
   try:
-    for name, command, cwd in commands:
+    print(
+        "Portfolio tracker: backend worker after 18:00 Asia/Kolkata "
+        "(no public port).",
+        flush=True,
+    )
+    for name, command, cwd, service_environment in commands:
       print(f"Starting {name}: {' '.join(command)}", flush=True)
-      process = subprocess.Popen(command, cwd=cwd, **process_options())
+      process = subprocess.Popen(
+          command,
+          cwd=cwd,
+          env=service_environment,
+          **process_options(),
+      )
       processes.append((name, process))
 
     while not stopping:
@@ -141,6 +199,7 @@ def start_services() -> int:
 
 
 def main() -> int:
+  local_env = read_env(ROOT / ".env")
   parser = argparse.ArgumentParser(
       description="Start the TimeSeries backend and frontend development services."
   )
@@ -149,17 +208,41 @@ def main() -> int:
       action="store_true",
       help="Validate commands and TimesFM configuration without starting services.",
   )
+  parser.add_argument(
+      "--backend-port",
+      type=port_number,
+      default=(
+          os.environ.get("BACKEND_PORT")
+          or local_env.get("BACKEND_PORT")
+          or str(DEFAULT_BACKEND_PORT)
+      ),
+      help="Dedicated backend port (default: 8000 or BACKEND_PORT).",
+  )
+  parser.add_argument(
+      "--frontend-port",
+      type=port_number,
+      default=(
+          os.environ.get("FRONTEND_PORT")
+          or local_env.get("FRONTEND_PORT")
+          or str(DEFAULT_FRONTEND_PORT)
+      ),
+      help="Dedicated frontend port (default: 5173 or FRONTEND_PORT).",
+  )
   args = parser.parse_args()
 
-  errors = validate()
+  errors = validate(local_env, args.backend_port, args.frontend_port)
   if errors:
     for error in errors:
       print(f"ERROR: {error}", file=sys.stderr)
     return 1
   if args.check:
-    print("Startup prerequisites and TimesFM checkpoint are valid.")
+    print(
+        "Startup prerequisites are valid: "
+        f"backend={args.backend_port}, frontend={args.frontend_port}, "
+        "portfolio tracker=backend worker."
+    )
     return 0
-  return start_services()
+  return start_services(local_env, args.backend_port, args.frontend_port)
 
 
 if __name__ == "__main__":

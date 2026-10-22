@@ -245,6 +245,8 @@ Current settings:
 | Variable | Purpose |
 | --- | --- |
 | `APP_ENV` | Current modes are `development` and `test` |
+| `BACKEND_PORT` | Dedicated local API port used by `scripts/start_services.py` |
+| `FRONTEND_PORT` | Dedicated local Vite port used by `scripts/start_services.py` |
 | `ALLOWED_ORIGINS` | Exact allowed frontend origins |
 | `MARKET_DATA_PROVIDER` | Provider adapter selection |
 | `TIMESFM_BACKEND` | Local `mlx` or `pytorch` adapter |
@@ -267,6 +269,15 @@ working directory. Docker Compose bind-mounts `backend/` at `/app`, so the
 default database remains on the host under `backend/data/`. Production
 deployment requires a durable writable volume, backups, and a migration plan;
 do not place the database inside an immutable image layer.
+
+The local API process also owns an in-process portfolio snapshot worker. From
+6:00 PM until midnight Asia/Kolkata it captures uncaptured positions, retries
+failures and newly added positions every five minutes, and upserts by symbol
+and exchange market date. This is appropriate for the documented single-worker
+local runtime. A multi-worker or horizontally scaled production deployment must
+move this schedule to one leader or a managed scheduler; otherwise workers may
+make redundant provider calls even though the SQLite upsert prevents duplicate
+rows.
 
 ## Release procedure
 
