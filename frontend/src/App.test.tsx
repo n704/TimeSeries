@@ -85,6 +85,20 @@ const forecastResponse = {
     forecast_change_percent: 3.86,
     historical_change_5d_percent: 1.2,
     historical_change_20d_percent: 2.4,
+    recent_trend: "upward" as const,
+    trend_alignment: "aligned" as const,
+    evidence_level: "supportive" as const,
+    historical_evaluation: {
+      holdout_sessions: 7,
+      context_end_date: "2026-10-07",
+      metrics: {
+        mean_absolute_error: 5,
+        mean_absolute_percentage_error: 1.25,
+        interval_coverage_percent: 85.71,
+        directional_accuracy_percent: 71.43,
+        end_direction_match: true,
+      },
+    },
     sma_20: 1200,
     sma_50: 1180,
     trend: "upward" as const,
@@ -276,6 +290,43 @@ describe("App", () => {
     expect(screen.getByText(/not financial advice/i)).toBeInTheDocument();
   });
 
+  it("flags an upward model forecast that opposes the recent decline", async () => {
+    apiMocks.createForecast.mockResolvedValue({
+      ...forecastResponse,
+      analysis: {
+        ...forecastResponse.analysis,
+        historical_change_5d_percent: -3.5,
+        recent_trend: "downward",
+        trend_alignment: "opposed",
+        evidence_level: "limited",
+        historical_evaluation: {
+          ...forecastResponse.analysis.historical_evaluation,
+          metrics: {
+            ...forecastResponse.analysis.historical_evaluation.metrics,
+            directional_accuracy_percent: 42.86,
+            end_direction_match: false,
+          },
+        },
+        summary:
+          "TimesFM's upward median opposes the latest five-session decline.",
+      },
+    });
+
+    render(<App />);
+
+    const evidence = await screen.findByRole("region", {
+      name: /accuracy and recent-pattern check/i,
+    });
+    expect(within(evidence).getByText("limited evidence")).toBeInTheDocument();
+    expect(within(evidence).getByText("-3.50%")).toBeInTheDocument();
+    expect(within(evidence).getByText("42.86%")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", {
+        name: /model range conflicts with recent trend/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
   it("re-runs the selected NIFTY 50 prediction from the button", async () => {
     render(<App />);
     await waitFor(() => expect(apiMocks.createForecast).toHaveBeenCalledTimes(1));
@@ -392,6 +443,8 @@ describe("App", () => {
         mean_absolute_error: 5,
         mean_absolute_percentage_error: 1.25,
         interval_coverage_percent: 85.71,
+        directional_accuracy_percent: 71.43,
+        end_direction_match: true,
       },
       metadata: {
         holdout_sessions: 7,
@@ -436,12 +489,68 @@ describe("App", () => {
     );
     expect(screen.getByText("1.25%")).toBeInTheDocument();
     expect(screen.getByText("85.71%")).toBeInTheDocument();
+    expect(screen.getByText("71.43%")).toBeInTheDocument();
     expect(
       screen.getByRole("table", {
         name: /predicted and actual prices for the holdout sessions/i,
       }),
     ).toBeInTheDocument();
     await waitFor(() => expect(heading).toHaveFocus());
+  });
+
+  it("keeps back-check results visible for an older backend response", async () => {
+    apiMocks.createBacktest.mockResolvedValue({
+      backtest_id: "bt_legacy",
+      security,
+      points: Array.from({ length: 7 }, (_, index) => ({
+        date: `2026-10-${String(index + 8).padStart(2, "0")}`,
+        actual: 1200 + index,
+        p10: 1180 + index,
+        p50: 1195 + index,
+        p90: 1220 + index,
+      })),
+      metrics: {
+        mean_absolute_error: 5,
+        mean_absolute_percentage_error: 1.25,
+        interval_coverage_percent: 85.71,
+      },
+      metadata: {
+        holdout_sessions: 7,
+        context_observations: 1240,
+        context_start_date: "2021-10-18",
+        context_end_date: "2026-10-07",
+        provider: "Fixture",
+        backend: "fixture",
+        model: "fixture-timesfm",
+        model_version: "test",
+        preprocessing_version: "1",
+        generated_at: "2026-10-17T00:00:00Z",
+        is_data_stale: false,
+      },
+      disclaimer: "Historical holdout only.",
+    });
+
+    render(<App />);
+    await screen.findByRole("heading", { name: /timesfm forecast/i });
+
+    fireEvent.click(
+      await screen.findByRole("button", {
+        name: /back-check last 7 sessions/i,
+      }),
+    );
+
+    expect(
+      await screen.findByRole("heading", { name: /historical back-check/i }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Unavailable")).toBeInTheDocument();
+    expect(
+      screen.getByText(/directional metrics are unavailable.*older api version/i),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("table", {
+        name: /predicted and actual prices for the holdout sessions/i,
+      }),
+    ).toBeInTheDocument();
   });
 
   it("saves the selected stock to a local watchlist", async () => {

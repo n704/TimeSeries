@@ -17,6 +17,7 @@ from app.schemas import (
     ForecastPoint,
     ForecastRequest,
     ForecastResponse,
+    HistoricalEvaluation,
     HistoryResponse,
     IndexScreenMetadata,
     IndexScreenRequest,
@@ -27,7 +28,7 @@ from app.schemas import (
     TrackingStateResponse,
 )
 from app.services.analysis import analyze_forecast
-from app.services.backtest import evaluate_backtest
+from app.services.backtest import build_backtest_points, evaluate_backtest
 from app.services.calendar import TradingCalendar
 from app.services.forecast import ForecastModel
 from app.services.indices import INDEX_UNIVERSES
@@ -165,7 +166,31 @@ async def create_forecast(
       [point.adjusted_close for point in history.prices],
       dtype=np.float32,
   )
-  output = await _model(request).predict(context, body.horizon)
+  model = _model(request)
+  output = await model.predict(context, body.horizon)
+  historical_evaluation = None
+  if len(history.prices) >= minimum + BACKTEST_SESSIONS:
+    evaluation_context_prices = history.prices[:-BACKTEST_SESSIONS]
+    evaluation_context = np.asarray(
+        [point.adjusted_close for point in evaluation_context_prices],
+        dtype=np.float32,
+    )
+    evaluation_output = await model.predict(
+        evaluation_context,
+        BACKTEST_SESSIONS,
+    )
+    evaluation_points = build_backtest_points(
+        history.prices[-BACKTEST_SESSIONS:],
+        evaluation_output,
+    )
+    historical_evaluation = HistoricalEvaluation(
+        holdout_sessions=BACKTEST_SESSIONS,
+        context_end_date=evaluation_context_prices[-1].date,
+        metrics=evaluate_backtest(
+            evaluation_points,
+            evaluation_context_prices[-1].adjusted_close,
+        ),
+    )
   forecast_dates = _calendar(request).next_sessions(
       history.security.exchange,
       history.prices[-1].date,
@@ -181,13 +206,16 @@ async def create_forecast(
           strict=True,
       )
   ]
-  model = _model(request)
   return ForecastResponse(
       forecast_id=f"fc_{uuid4().hex}",
       security=history.security,
       history=history.prices[-120:],
       forecast=points,
-      analysis=analyze_forecast(history.prices, points),
+      analysis=analyze_forecast(
+          history.prices,
+          points,
+          historical_evaluation,
+      ),
       metadata=ForecastMetadata(
           horizon_trading_days=body.horizon,
           context_observations=len(history.prices),
@@ -354,28 +382,16 @@ async def create_backtest(
       dtype=np.float32,
   )
   output = await _model(request).predict(context, BACKTEST_SESSIONS)
-  points = [
-      BacktestPoint(
-          date=actual.date,
-          actual=actual.adjusted_close,
-          p10=p10,
-          p50=p50,
-          p90=p90,
-      )
-      for actual, p10, p50, p90 in zip(
-          actual_prices,
-          output.p10,
-          output.p50,
-          output.p90,
-          strict=True,
-      )
-  ]
+  points = build_backtest_points(actual_prices, output)
   model = _model(request)
   return BacktestResponse(
       backtest_id=f"bt_{uuid4().hex}",
       security=history.security,
       points=points,
-      metrics=evaluate_backtest(points),
+      metrics=evaluate_backtest(
+          points,
+          context_prices[-1].adjusted_close,
+      ),
       metadata=BacktestMetadata(
           holdout_sessions=BACKTEST_SESSIONS,
           context_observations=len(context_prices),

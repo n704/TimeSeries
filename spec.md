@@ -2,7 +2,7 @@
 
 **Status:** Draft for implementation
 
-**Last updated:** 2026-10-18
+**Last updated:** 2026-10-19
 
 **Product type:** Python API and React single-page application
 
@@ -170,6 +170,11 @@ the provider returns one unique active listing.
 - `FR-FORECAST-08`: A model or infrastructure error must be surfaced as an
   explicit error. The API must not substitute a heuristic forecast and present
   it as TimesFM output.
+- `FR-FORECAST-09`: When at least 127 valid observations are available, each
+  forecast also runs an isolated seven-session holdout using context that ends
+  before all seven known closes. Holdout error and recent-trend checks may
+  qualify the evidence shown with the outlook, but must not modify TimesFM's
+  returned p10, p50, or p90 values.
 
 ### 5.5 Historical back-check
 
@@ -184,7 +189,9 @@ the provider returns one unique active listing.
   adapter and pair each output step with the corresponding known market date.
 - `FR-BACKTEST-05`: Return actual adjusted close, p10, p50, and p90 for each
   holdout session plus mean absolute error, mean absolute percentage error, and
-  p10-p90 interval coverage.
+  p10-p90 interval coverage, daily directional accuracy, and whether the
+  modeled end direction matched the actual end direction from the context-end
+  close.
 - `FR-BACKTEST-06`: Clearly identify the result as one historical holdout. Do
   not present it as a guarantee of future performance or financial advice.
 
@@ -195,6 +202,9 @@ forecast values:
 
 - Latest adjusted close.
 - Historical percentage change over 5 and 20 trading sessions when available.
+- Direction of the latest five-session move using the same +/-1% thresholds as
+  the forecast trend, and whether that direction is aligned with, opposed to,
+  or neutral relative to the TimesFM median direction.
 - 20-session and 50-session simple moving averages.
 - Forecast end price and percentage change from the latest close.
 - Trend label:
@@ -202,12 +212,26 @@ forecast values:
   - `downward` when forecast change is less than `-1%`;
   - `mostly_flat` otherwise.
 - Interval width at the final forecast step as a percentage of the median.
+- An optional isolated seven-session historical evaluation containing mean
+  absolute error, mean absolute percentage error, p10-p90 coverage, daily
+  directional accuracy, and end-direction match.
+- An evidence level:
+  - `limited` when the holdout is unavailable, the recent and modeled trends
+    are opposed, the holdout end direction does not match, MAPE is greater than
+    5%, or daily directional accuracy is below 50%;
+  - `supportive` when recent and modeled trends align, MAPE is at most 2%,
+    daily directional accuracy is at least 70%, and interval coverage is at
+    least 70%;
+  - `mixed` otherwise.
 
 The summary must use neutral language, for example:
 
 > TimesFM's median forecast is 3.4% above the latest adjusted close over the
-> next 20 trading sessions. The p10-p90 interval widens toward the end of the
-> horizon, indicating increasing uncertainty.
+> next 20 trading sessions. The latest five-session move is -2.1% and points in
+> the opposite direction. In the isolated seven-session back-check, the median
+> path's mean absolute percentage error was 3.2% and daily directional accuracy
+> was 42.9%. Taken together, the evidence level is limited; one holdout cannot
+> guarantee future accuracy.
 
 The summary must not state that the stock "will" reach a price and must not use
 recommendation language.
@@ -277,6 +301,8 @@ The MVP is a single-page application with these regions:
    - Primary **Generate forecast** button.
 6. **Results**
    - Trend summary.
+   - Evidence level, latest five-session alignment, and isolated holdout error,
+     coverage, and directional accuracy when available.
    - Neutral model-screening label on the NIFTY 50 research tab.
    - Index selector and top-five positive 20-session median comparison with
      coverage and uncertainty.
@@ -695,6 +721,20 @@ Success, `200`:
     "forecast_change_percent": 3.4,
     "historical_change_5d_percent": 1.2,
     "historical_change_20d_percent": -0.8,
+    "recent_trend": "upward",
+    "trend_alignment": "aligned",
+    "evidence_level": "supportive",
+    "historical_evaluation": {
+      "holdout_sessions": 7,
+      "context_end_date": "2026-10-07",
+      "metrics": {
+        "mean_absolute_error": 14.25,
+        "mean_absolute_percentage_error": 1.18,
+        "interval_coverage_percent": 85.71,
+        "directional_accuracy_percent": 71.43,
+        "end_direction_match": true
+      }
+    },
     "sma_20": 1195.18,
     "sma_50": 1172.64,
     "trend": "upward",
@@ -756,7 +796,9 @@ Success, `200`:
   "metrics": {
     "mean_absolute_error": 14.25,
     "mean_absolute_percentage_error": 1.18,
-    "interval_coverage_percent": 85.71
+    "interval_coverage_percent": 85.71,
+    "directional_accuracy_percent": 71.43,
+    "end_direction_match": true
   },
   "metadata": {
     "holdout_sessions": 7,
@@ -1035,7 +1077,11 @@ The MVP is complete only when:
 13. Every result visibly identifies its data source, last market date, model
     version, generation time, and financial disclaimer.
 14. A user can back-check the latest seven sessions, inspect actual versus
-    predicted prices, and confirm that the model context ends before the holdout.
+    predicted prices, inspect error and directional metrics, and confirm that
+    the model context ends before the holdout.
+15. Every forecast with enough history identifies when its TimesFM direction
+    opposes the latest five-session move and qualifies the outlook using the
+    isolated holdout without changing model quantiles.
 
 ## 18. References
 

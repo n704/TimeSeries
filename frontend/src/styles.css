@@ -633,6 +633,27 @@ h1 span {
   line-height: 1.55;
 }
 
+.forecast-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trend-chip.evidence-supportive {
+  color: var(--green);
+  border-color: rgba(11, 143, 96, 0.3);
+}
+
+.trend-chip.evidence-mixed {
+  color: #8a5b17;
+  border-color: rgba(197, 137, 49, 0.45);
+}
+
+.trend-chip.evidence-limited {
+  color: var(--red);
+  border-color: rgba(241, 132, 132, 0.4);
+}
+
 .overview-metrics {
   margin: 0;
 }
@@ -644,6 +665,51 @@ h1 span {
 
 .overview-metrics strong {
   font-size: 18px;
+}
+
+.forecast-evidence {
+  margin: 14px 0;
+  padding: 22px 24px;
+  border: 1px solid #d0e1d6;
+  border-left: 4px solid var(--green);
+  border-radius: 18px;
+  background: #f8fcf9;
+}
+
+.forecast-evidence.mixed {
+  border-left-color: #c58931;
+}
+
+.forecast-evidence.limited {
+  border-left-color: var(--red);
+}
+
+.forecast-evidence-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 18px;
+}
+
+.forecast-evidence-heading h3 {
+  margin: 6px 0 0;
+  color: var(--forest);
+  font-size: 20px;
+}
+
+.forecast-evidence-heading > strong {
+  color: var(--forest);
+  text-transform: capitalize;
+}
+
+.evidence-metrics {
+  margin: 18px 0;
+}
+
+.evidence-note {
+  margin: 0;
+  color: #61766c;
+  line-height: 1.55;
 }
 
 .analysis-toolbar {
@@ -1003,7 +1069,7 @@ legend { color: var(--muted); font-size: 12px; margin-bottom: 8px; }
 }
 .metric-grid span { display: block; color: var(--muted); font-size: 13px; margin-bottom: 8px; }
 .metric-grid strong { color: var(--forest); font: 650 22px Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-.backtest-metrics { grid-template-columns: repeat(3, 1fr); }
+.backtest-metrics { grid-template-columns: repeat(4, 1fr); }
 .positive { color: var(--green); }
 .negative { color: var(--red); }
 

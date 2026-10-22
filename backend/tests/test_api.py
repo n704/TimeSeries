@@ -154,6 +154,20 @@ def test_forecast_contract_contains_chart_data_and_analysis() -> None:
   assert payload["forecast"][0]["p10"] < payload["forecast"][0]["p50"]
   assert payload["forecast"][0]["p50"] < payload["forecast"][0]["p90"]
   assert payload["analysis"]["trend"] == "upward"
+  assert payload["analysis"]["recent_trend"] == "upward"
+  assert payload["analysis"]["trend_alignment"] == "aligned"
+  assert payload["analysis"]["evidence_level"] == "supportive"
+  assert payload["analysis"]["historical_evaluation"] == {
+      "holdout_sessions": 7,
+      "context_end_date": "2026-05-23",
+      "metrics": {
+          "mean_absolute_error": 0.0,
+          "mean_absolute_percentage_error": 0.0,
+          "interval_coverage_percent": 100.0,
+          "directional_accuracy_percent": 100.0,
+          "end_direction_match": True,
+      },
+  }
   assert payload["metadata"]["backend"] == "fixture"
   assert "financial advice" in payload["disclaimer"]
 
@@ -171,6 +185,19 @@ def test_forecast_rejects_insufficient_history() -> None:
       "required_observations": 120,
       "available_observations": 25,
   }
+
+
+def test_forecast_remains_available_without_enough_backtest_history() -> None:
+  with make_client(history_count=123) as client:
+    response = client.post(
+        "/api/v1/forecasts",
+        json={"symbol": "RELIANCE.NS", "horizon": 5},
+    )
+
+  assert response.status_code == 200
+  analysis = response.json()["analysis"]
+  assert analysis["historical_evaluation"] is None
+  assert analysis["evidence_level"] == "limited"
 
 
 def test_invalid_horizon_uses_public_error_shape() -> None:
@@ -247,6 +274,8 @@ def test_backtest_predicts_last_seven_sessions_from_prior_history() -> None:
       "mean_absolute_error": 0.0,
       "mean_absolute_percentage_error": 0.0,
       "interval_coverage_percent": 100.0,
+      "directional_accuracy_percent": 100.0,
+      "end_direction_match": True,
   }
   assert payload["metadata"]["holdout_sessions"] == 7
   assert payload["metadata"]["context_observations"] == 143

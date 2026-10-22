@@ -1,8 +1,8 @@
 # Backend
 
 FastAPI service for security search, adjusted-close history, exchange-aware
-forecast dates, local TimesFM inference, neutral trend analysis, and SQLite
-watchlist/portfolio persistence.
+forecast dates, local TimesFM inference, holdout-aware neutral trend analysis,
+and SQLite watchlist/portfolio persistence.
 
 ## Architecture
 
@@ -151,7 +151,8 @@ Content-Type: application/json
 The endpoint withholds the latest seven valid adjusted-close observations,
 predicts those seven sessions using only the earlier context, and returns the
 actual and p10/p50/p90 values. It also reports mean absolute error, mean
-absolute percentage error, and p10-p90 interval coverage.
+absolute percentage error, p10-p90 interval coverage, daily directional
+accuracy, and whether the modeled end direction matched the holdout.
 
 ### Index positive forecast screen
 
@@ -175,13 +176,19 @@ final p10-p90 uncertainty. It is not an investment recommendation.
 2. Validate, order, and require at least 120 observations.
 3. Convert the context to `float32`.
 4. Run the configured singleton `ForecastModel`.
-5. Extract and validate p10, p50, and p90.
-6. Map output steps to future Indian exchange sessions.
-7. Calculate moving averages, changes, trend, and uncertainty width.
-8. Return the most recent 120 historical points for the default forecast chart.
+5. When at least 127 observations are available, run a second isolated
+   seven-session holdout forecast using context that ends before all seven
+   known closes.
+6. Extract and validate p10, p50, and p90 without modifying TimesFM output.
+7. Map output steps to future Indian exchange sessions.
+8. Calculate moving averages, changes, trend, uncertainty width, recent
+   five-session alignment, and holdout error/directional evidence.
+9. Return the most recent 120 historical points for the default forecast chart.
 
 For a back-check, the latest seven observations are removed before inference
-and are used only after inference to calculate holdout metrics.
+and are used only after inference to calculate holdout metrics. A forecast with
+120-126 observations remains available, but its evidence level is limited
+because an isolated holdout cannot be formed.
 
 ## Tests
 
@@ -197,7 +204,8 @@ Tests cover:
 - analysis calculations and wording;
 - endpoint success and error contracts;
 - insufficient history;
-- seven-session holdout isolation and metrics;
+- seven-session holdout isolation, error, coverage, and directional metrics;
+- recent-trend disagreement and forecast evidence levels;
 - multi-index batch screening and positive 20-session ranking;
 - application startup cleanup;
 - local adapter checkpoint requirements;

@@ -8,6 +8,8 @@ A Mac-first stock trend forecasting application with:
 - daily Indian common-stock data from Yahoo Finance;
 - an on-disk Google Research TimesFM 3.0 checkpoint;
 - historical and forecast charts with p10-p90 uncertainty ranges;
+- forecast evidence that compares the model direction with the latest
+  five-session move and an isolated seven-session holdout;
 - a SQLite-backed watchlist and paper portfolio with selectable 7-, 20-, and
   60-session probabilistic outlooks.
 
@@ -241,8 +243,15 @@ curl -X POST http://localhost:8000/api/v1/backtests \
 ```
 
 The back-check hides the latest seven adjusted closes, predicts them using only
-earlier observations, and reports median-error and p10-p90 coverage metrics.
-It is a single historical holdout, not a guarantee of future accuracy.
+earlier observations, and reports median error, p10-p90 coverage, daily
+directional accuracy, and whether the modeled end direction matched the known
+holdout. It is a single historical holdout, not a guarantee of future accuracy.
+
+Forecast responses automatically include the same isolated holdout evidence
+when at least 127 valid observations are available. The analysis also compares
+the TimesFM median direction with the latest five-session adjusted-close move.
+These checks qualify the evidence shown to the user; they never alter or replace
+the raw TimesFM p10, p50, or p90 values.
 
 Example index research screen:
 
