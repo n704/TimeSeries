@@ -320,16 +320,21 @@ The MVP is a single-page application with these regions:
    - Save the latest available adjusted close for each paper position at
      4:00 PM Asia/Kolkata on exchange trading days, keyed by its actual
      exchange market date.
-   - Show a responsive adjusted-close snapshot chart for each position, with
-     its average price as a labeled reference line.
+   - Show one responsive portfolio-value chart that totals every current
+     position from its saved adjusted closes, with total cost basis as a
+     labeled reference line.
+   - Begin the aggregate chart only when every current position has a saved
+     close. For later gaps, carry forward that position's most recent saved
+     close and disclose how many positions refreshed on the latest chart date.
    - Show the latest daily price and position-value change plus an expandable
      exact-value table of saved per-session changes as the chart alternative.
-   - Let users select a 7-, 20-, or 60-session portfolio outlook. Show the
+   - Let users select a 5-, 7-, 20-, or 60-session portfolio outlook. Show the
      selected future session's p50 price and p10-p90 range when that forecast
      point has been generated.
-   - Automatically generate missing 20-session forecasts for the 7- and
-     20-session portfolio views, and missing 60-session forecasts for the
-     60-session view. Show progress and per-symbol failures.
+   - Automatically generate missing 5-session forecasts for the 5-session
+     view, missing 20-session forecasts for the 7- and 20-session views, and
+     missing 60-session forecasts for the 60-session view. Show progress and
+     per-symbol failures.
    - Persist tracking state through the backend `TrackingStore`. Direct local
      runs default to SQLite; Docker Compose uses PostgreSQL and supports a
      verified migration from the SQLite source.
@@ -878,7 +883,7 @@ hold recommendation.
 The API permits at most 20 unique watchlist symbols and 20 unique position
 symbols. Quantities, prices, and forecast quantiles must be finite and positive;
 every outlook must satisfy `p10 <= p50 <= p90`. Supported outlook keys are
-exactly `7`, `20`, and `60`.
+exactly `5`, `7`, `20`, and `60`.
 
 The local API process runs one background portfolio snapshot worker. At 4:00 PM
 Asia/Kolkata on an NSE or BSE trading day, it captures uncaptured positions
@@ -1128,9 +1133,9 @@ The MVP is complete only when:
     holdout evidence.
 16. While the local API is running, paper positions are captured at 4:00 PM
     Asia/Kolkata only when their exchange has a valid trading session, duplicate
-    market dates are upserted, and the tracker displays responsive per-position
-    snapshot charts plus latest and historical per-session changes without
-    implying live prices.
+    market dates are upserted, and the tracker displays one responsive
+    aggregate portfolio-value chart plus latest and historical per-session
+    changes without implying live prices.
 
 ## 18. References
 

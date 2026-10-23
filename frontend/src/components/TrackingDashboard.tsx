@@ -131,7 +131,7 @@ export function TrackingDashboard({
   );
   const hasCompleteOutlook =
     positions.length > 0 && forecastedPositions.length === positions.length;
-  const positionsWithSnapshots = positions.filter(
+  const hasCompleteSnapshotHistory = positions.every(
     (position) => (position.priceHistory?.length ?? 0) > 0,
   );
 
@@ -187,6 +187,7 @@ export function TrackingDashboard({
                   )
                 }
               >
+                <option value={5}>5 sessions</option>
                 <option value={7}>7 sessions</option>
                 <option value={20}>20 sessions</option>
                 <option value={60}>60 sessions</option>
@@ -286,27 +287,20 @@ export function TrackingDashboard({
                 <div>
                   <p className="step-label">SAVED MARKET HISTORY</p>
                   <h3 id="portfolio-snapshots-heading">
-                    Portfolio snapshot charts
+                    Portfolio value history
                   </h3>
                 </div>
                 <p>
-                  Adjusted closes captured at 4:00 PM on exchange trading days;
-                  dashed lines mark each position's average price.
+                  Total value uses each holding's latest saved close on or
+                  before a session; the dashed line marks total cost basis.
                 </p>
               </div>
-              {positionsWithSnapshots.length ? (
-                <div className="portfolio-snapshot-grid">
-                  {positionsWithSnapshots.map((position) => (
-                    <PortfolioSnapshotChart
-                      key={position.security.symbol}
-                      position={position}
-                    />
-                  ))}
-                </div>
+              {hasCompleteSnapshotHistory ? (
+                <PortfolioSnapshotChart positions={positions} />
               ) : (
                 <p className="snapshot-chart-empty">
-                  Snapshot charts appear after the first scheduled market-day
-                  capture.
+                  The portfolio chart appears after every current position has
+                  its first scheduled market-day capture.
                 </p>
               )}
             </section>
@@ -421,7 +415,7 @@ export function TrackingDashboard({
                             <span className="forecast-pending">
                               {forecasting
                                 ? `Generating ${outlookHorizon}-session forecast…`
-                                : `Run a ${outlookHorizon === 60 ? "60" : "20"}-session forecast`}
+                                : `Run a ${outlookHorizon === 7 ? "20" : outlookHorizon}-session forecast`}
                             </span>
                           )}
                         </td>

@@ -155,7 +155,7 @@ function getResearchSignal(forecast: ForecastResponse): ResearchSignal {
 
 function getPortfolioOutlooks(forecast: ForecastResponse): PortfolioOutlooks {
   const outlooks: PortfolioOutlooks = {};
-  const horizons = [7, 20, 60] as const;
+  const horizons = [5, 7, 20, 60] as const;
   for (const horizon of horizons) {
     const point = forecast.forecast[horizon - 1];
     if (!point) continue;
@@ -531,7 +531,7 @@ export default function App() {
     setPortfolioOutlookHorizon(nextHorizon);
     portfolioForecastRequestRef.current?.abort();
     const requiredHorizon: ForecastHorizon =
-      nextHorizon === 60 ? 60 : 20;
+      nextHorizon === 7 ? 20 : nextHorizon;
     const missing = positions.filter(
       (position) => !position.outlooks?.[nextHorizon],
     );

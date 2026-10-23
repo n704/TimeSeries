@@ -81,6 +81,13 @@ def test_tracking_state_persists_through_api() -> None:
               "latest_close": 1211.2,
               "last_market_date": "2026-10-16",
               "outlooks": {
+                  "5": {
+                      "date": "2026-10-23",
+                      "p10": 1175,
+                      "p50": 1230,
+                      "p90": 1285,
+                      "generated_at": "2026-10-18T00:00:00Z",
+                  },
                   "20": {
                       "date": "2026-11-16",
                       "p10": 1180,

@@ -10,8 +10,8 @@ A Mac-first stock trend forecasting application with:
 - historical and forecast charts with p10-p90 uncertainty ranges;
 - forecast evidence that compares the model direction with the latest
   five-session move and an isolated seven-session holdout;
-- a database-backed watchlist and paper portfolio with selectable 7-, 20-, and
-  60-session probabilistic outlooks and saved daily adjusted closes captured
+- a database-backed watchlist and paper portfolio with selectable 5-, 7-, 20-,
+  and 60-session probabilistic outlooks and saved daily adjusted closes captured
   at 4:00 PM Asia/Kolkata on exchange trading days. Direct local runs default
   to SQLite; Docker Compose uses PostgreSQL.
 
@@ -252,7 +252,8 @@ position's exchange trading days. A process that starts later on the same
 trading day catches up automatically. Rows are keyed by symbol and exchange
 market date, so weekends, holidays, and restarts do not create duplicate or
 synthetic prices. Tracking responses include up to 30 saved sessions per
-position for adjusted-close charts and an exact daily-change table.
+position for one aggregate portfolio-value chart and an exact daily-change
+table.
 
 Example forecast request:
 

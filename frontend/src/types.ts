@@ -169,7 +169,7 @@ export interface PortfolioOutlook {
   generatedAt: string;
 }
 
-export type PortfolioOutlookHorizon = 7 | 20 | 60;
+export type PortfolioOutlookHorizon = 5 | 7 | 20 | 60;
 export type PortfolioOutlooks = Partial<
   Record<PortfolioOutlookHorizon, PortfolioOutlook>
 >;

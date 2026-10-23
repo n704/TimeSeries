@@ -19,7 +19,15 @@ const apiState = {
       average_price: 1000,
       latest_close: 1211.2,
       last_market_date: "2026-10-22",
-      outlooks: {},
+      outlooks: {
+        "5": {
+          date: "2026-10-29",
+          p10: 1190,
+          p50: 1230,
+          p90: 1270,
+          generated_at: "2026-10-22T12:30:00Z",
+        },
+      },
       price_history: [
         {
           date: "2026-10-21",
@@ -68,6 +76,13 @@ describe("tracking API mapping", () => {
         capturedAt: "2026-10-22T12:30:00Z",
       },
     ]);
+    expect(result.positions[0].outlooks?.[5]).toEqual({
+      date: "2026-10-29",
+      p10: 1190,
+      p50: 1230,
+      p90: 1270,
+      generatedAt: "2026-10-22T12:30:00Z",
+    });
   });
 
   it("does not send server-managed price history in tracking updates", async () => {
@@ -94,7 +109,15 @@ describe("tracking API mapping", () => {
           averagePrice: 1000,
           latestClose: 1211.2,
           lastMarketDate: "2026-10-22",
-          outlooks: {},
+          outlooks: {
+            5: {
+              date: "2026-10-29",
+              p10: 1190,
+              p50: 1230,
+              p90: 1270,
+              generatedAt: "2026-10-22T12:30:00Z",
+            },
+          },
           priceHistory: [
             {
               date: "2026-10-22",
@@ -113,5 +136,12 @@ describe("tracking API mapping", () => {
     const body = JSON.parse(String(request?.body));
     expect(body.positions[0]).not.toHaveProperty("price_history");
     expect(body.positions[0]).not.toHaveProperty("priceHistory");
+    expect(body.positions[0].outlooks["5"]).toEqual({
+      date: "2026-10-29",
+      p10: 1190,
+      p50: 1230,
+      p90: 1270,
+      generated_at: "2026-10-22T12:30:00Z",
+    });
   });
 });
