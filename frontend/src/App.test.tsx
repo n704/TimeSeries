@@ -50,13 +50,13 @@ vi.mock("./components/PriceChart", () => ({
 
 vi.mock("./components/PortfolioSnapshotChart", () => ({
   PortfolioSnapshotChart: ({
-    position,
+    positions,
   }: {
-    position: PortfolioPosition;
+    positions: PortfolioPosition[];
   }) => (
     <div
       role="img"
-      aria-label={`${position.security.symbol} saved adjusted-close snapshot chart`}
+      aria-label={`Entire portfolio saved value chart for ${positions.length} ${positions.length === 1 ? "position" : "positions"}`}
     />
   ),
 }));
@@ -661,6 +661,12 @@ describe("App", () => {
     expect(within(portfolioTable).getByText(/2026-11-07/)).toBeInTheDocument();
     fireEvent.change(
       screen.getByRole("combobox", { name: /portfolio forecast horizon/i }),
+      { target: { value: "5" } },
+    );
+    expect(within(portfolioTable).getByText(/1,228\.00/)).toBeInTheDocument();
+    expect(within(portfolioTable).getByText(/2,456\.00/)).toBeInTheDocument();
+    fireEvent.change(
+      screen.getByRole("combobox", { name: /portfolio forecast horizon/i }),
       { target: { value: "20" } },
     );
     expect(within(portfolioTable).getByText(/1,258\.00/)).toBeInTheDocument();
@@ -700,6 +706,7 @@ describe("App", () => {
             expect.objectContaining({
               quantity: 2,
               outlooks: expect.objectContaining({
+                5: expect.objectContaining({ p50: 1228 }),
                 7: expect.objectContaining({ p50: 1232 }),
                 20: expect.objectContaining({ p50: 1258 }),
                 60: expect.objectContaining({ p50: 1338 }),
@@ -758,17 +765,32 @@ describe("App", () => {
     ).toBeInTheDocument();
     expect(screen.getByText(/\+10\.00% · 1 of 1 through 2026-10-22/i)).toBeInTheDocument();
     expect(
-      screen.getByRole("heading", { name: /portfolio snapshot charts/i }),
+      screen.getByRole("heading", { name: /portfolio value history/i }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("img", {
-        name: /reliance\.ns saved adjusted-close snapshot chart/i,
+        name: /entire portfolio saved value chart for 1 position/i,
       }),
     ).toBeInTheDocument();
     const portfolioTable = screen.getByRole("table", {
       name: /locally saved paper portfolio positions/i,
     });
     expect(within(portfolioTable).getByText(/\+10\.00% price/i)).toBeInTheDocument();
+    fireEvent.change(
+      screen.getByRole("combobox", { name: /portfolio forecast horizon/i }),
+      { target: { value: "5" } },
+    );
+    await waitFor(() =>
+      expect(apiMocks.createForecast).toHaveBeenLastCalledWith(
+        "RELIANCE.NS",
+        5,
+        expect.any(AbortSignal),
+      ),
+    );
+    expect(
+      await within(portfolioTable).findByText(/1,228\.00/),
+    ).toBeInTheDocument();
+    expect(within(portfolioTable).getByText(/2,456\.00/)).toBeInTheDocument();
     fireEvent.click(
       screen.getByText(/view saved daily price changes/i),
     );

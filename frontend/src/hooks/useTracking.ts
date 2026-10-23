@@ -99,7 +99,7 @@ function isPortfolioOutlooks(value: unknown): value is PortfolioOutlooks {
   if (typeof value !== "object" || value === null) return false;
   return Object.entries(value).every(
     ([key, outlook]) =>
-      (key === "7" || key === "20" || key === "60") &&
+      (key === "5" || key === "7" || key === "20" || key === "60") &&
       isPortfolioOutlook(outlook),
   );
 }

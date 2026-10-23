@@ -13,35 +13,71 @@ import type { PortfolioPosition } from "../types";
 
 interface PortfolioSnapshotChartDatum {
   date: string;
-  adjustedClose: number;
-  positionValue: number;
+  marketValue: number;
+  updatedPositions: number;
 }
 
 interface PortfolioSnapshotChartProps {
-  position: PortfolioPosition;
+  positions: PortfolioPosition[];
 }
 
 export function buildPortfolioSnapshotChartData(
-  position: PortfolioPosition,
+  positions: PortfolioPosition[],
 ): PortfolioSnapshotChartDatum[] {
-  return [...(position.priceHistory ?? [])]
-    .sort((left, right) => left.date.localeCompare(right.date))
-    .map((snapshot) => ({
-      date: snapshot.date,
-      adjustedClose: snapshot.adjustedClose,
-      positionValue: snapshot.adjustedClose * position.quantity,
-    }));
+  if (!positions.length) return [];
+
+  const holdings = positions.map((position) => ({
+    position,
+    history: [...(position.priceHistory ?? [])].sort((left, right) =>
+      left.date.localeCompare(right.date),
+    ),
+  }));
+  if (holdings.some(({ history }) => history.length === 0)) return [];
+
+  const firstCompleteDate = holdings.reduce(
+    (latest, { history }) =>
+      history[0].date > latest ? history[0].date : latest,
+    holdings[0].history[0].date,
+  );
+  const dates = Array.from(
+    new Set(
+      holdings.flatMap(({ history }) =>
+        history
+          .filter((snapshot) => snapshot.date >= firstCompleteDate)
+          .map((snapshot) => snapshot.date),
+      ),
+    ),
+  ).sort();
+
+  return dates.map((date) => {
+    let marketValue = 0;
+    let updatedPositions = 0;
+    for (const { position, history } of holdings) {
+      let latestClose: number | null = null;
+      let updatedOnDate = false;
+      for (const snapshot of history) {
+        if (snapshot.date > date) break;
+        latestClose = snapshot.adjustedClose;
+        updatedOnDate = snapshot.date === date;
+      }
+      if (latestClose === null) continue;
+      marketValue += latestClose * position.quantity;
+      if (updatedOnDate) updatedPositions += 1;
+    }
+    return { date, marketValue, updatedPositions };
+  });
 }
 
 export function getPortfolioSnapshotChartDomain(
-  position: PortfolioPosition,
+  positions: PortfolioPosition[],
 ): [number, number] {
-  const values = [
-    position.averagePrice,
-    ...(position.priceHistory ?? []).map(
-      (snapshot) => snapshot.adjustedClose,
-    ),
-  ];
+  const data = buildPortfolioSnapshotChartData(positions);
+  const costBasis = positions.reduce(
+    (total, position) =>
+      total + position.averagePrice * position.quantity,
+    0,
+  );
+  const values = [costBasis, ...data.map((snapshot) => snapshot.marketValue)];
   const minimum = Math.min(...values);
   const maximum = Math.max(...values);
   const range = maximum - minimum;
@@ -61,40 +97,49 @@ function dateLabel(value: string): string {
 }
 
 export function PortfolioSnapshotChart({
-  position,
+  positions,
 }: PortfolioSnapshotChartProps) {
-  const data = buildPortfolioSnapshotChartData(position);
+  const data = buildPortfolioSnapshotChartData(positions);
   if (!data.length) return null;
 
+  const currency = positions[0].security.currency;
   const formatter = new Intl.NumberFormat(undefined, {
     style: "currency",
-    currency: position.security.currency,
+    currency,
     maximumFractionDigits: 2,
   });
+  const costBasis = positions.reduce(
+    (total, position) =>
+      total + position.averagePrice * position.quantity,
+    0,
+  );
   const first = data[0];
   const latest = data[data.length - 1];
-  const domain = getPortfolioSnapshotChartDomain(position);
+  const domain = getPortfolioSnapshotChartDomain(positions);
+  const positionLabel =
+    positions.length === 1 ? "1 position" : `${positions.length} positions`;
 
   return (
     <article className="snapshot-chart-card">
       <div className="snapshot-chart-card-heading">
         <div>
-          <p>
-            {position.security.symbol} · {position.security.exchange}
-          </p>
-          <h4>{position.security.name}</h4>
+          <p>ENTIRE PAPER PORTFOLIO</p>
+          <h4>
+            {positions.length} tracked{" "}
+            {positions.length === 1 ? "position" : "positions"}
+          </h4>
         </div>
         <div className="snapshot-chart-latest">
-          <span>Latest saved close</span>
-          <strong>{formatter.format(latest.adjustedClose)}</strong>
+          <span>Latest saved value</span>
+          <strong>{formatter.format(latest.marketValue)}</strong>
         </div>
       </div>
       <div
         className="snapshot-chart-shell"
         role="img"
-        aria-label={`${position.security.symbol} saved adjusted-close snapshot chart from ${first.date} through ${latest.date}`}
+        aria-label={`Entire portfolio saved value chart from ${first.date} through ${latest.date} for ${positionLabel}`}
       >
-        <ResponsiveContainer width="100%" height={250}>
+        <ResponsiveContainer width="100%" height={340}>
           <LineChart
             data={data}
             margin={{ top: 20, right: 18, bottom: 8, left: 0 }}
@@ -115,7 +160,7 @@ export function PortfolioSnapshotChart({
             <YAxis
               domain={domain}
               tickFormatter={(value: number) => formatter.format(value)}
-              width={76}
+              width={90}
               stroke="#6f8379"
               tickLine={false}
               axisLine={false}
@@ -124,7 +169,7 @@ export function PortfolioSnapshotChart({
               labelFormatter={(label) => dateLabel(String(label))}
               formatter={(value) => [
                 formatter.format(Number(value)),
-                "Adjusted close",
+                "Portfolio value",
               ]}
               contentStyle={{
                 background: "#082f25",
@@ -136,12 +181,12 @@ export function PortfolioSnapshotChart({
               labelStyle={{ color: "#d2e7da" }}
             />
             <ReferenceLine
-              y={position.averagePrice}
+              y={costBasis}
               stroke="#bd7d2a"
               strokeDasharray="5 5"
               ifOverflow="extendDomain"
               label={{
-                value: "Average price",
+                value: "Cost basis",
                 fill: "#8a5c20",
                 fontSize: 11,
                 position: "insideTopRight",
@@ -149,8 +194,8 @@ export function PortfolioSnapshotChart({
             />
             <Line
               type="monotone"
-              dataKey="adjustedClose"
-              name="Adjusted close"
+              dataKey="marketValue"
+              name="Portfolio value"
               stroke="#0b8f60"
               strokeWidth={2.5}
               dot={data.length <= 12 ? { r: 3, fill: "#0b8f60" } : false}
@@ -161,10 +206,12 @@ export function PortfolioSnapshotChart({
       </div>
       <div className="snapshot-chart-meta">
         <span>
-          {data.length} saved {data.length === 1 ? "session" : "sessions"}
+          {data.length} saved portfolio{" "}
+          {data.length === 1 ? "session" : "sessions"}
         </span>
         <span>
-          Position value {formatter.format(latest.positionValue)}
+          Latest capture refreshed {latest.updatedPositions} of{" "}
+          {positions.length} positions
         </span>
       </div>
     </article>

@@ -227,7 +227,7 @@ class PortfolioPosition(BaseModel):
   average_price: float = Field(gt=0)
   latest_close: float = Field(gt=0)
   last_market_date: date
-  outlooks: dict[Literal["7", "20", "60"], TrackingOutlook] = Field(
+  outlooks: dict[Literal["5", "7", "20", "60"], TrackingOutlook] = Field(
       default_factory=dict
   )
   updated_at: datetime

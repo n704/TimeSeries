@@ -45,7 +45,7 @@ interface ApiPortfolioPosition {
   average_price: number;
   latest_close: number;
   last_market_date: string;
-  outlooks: Partial<Record<"7" | "20" | "60", ApiPortfolioOutlook>>;
+  outlooks: Partial<Record<"5" | "7" | "20" | "60", ApiPortfolioOutlook>>;
   price_history?: ApiPortfolioPriceSnapshot[];
   updated_at: string;
 }
